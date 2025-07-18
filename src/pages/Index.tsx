@@ -9,7 +9,7 @@ const BlockPuzzleGame = () => {
   const [draggedPiece, setDraggedPiece] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [gameOver, setGameOver] = useState(false);
-  const [bestScore, setBestScore] = useState(0);
+  const [coins, setCoins] = useState(0);
   const [hintsRemaining, setHintsRemaining] = useState(3);
   const [showAdModal, setShowAdModal] = useState(false);
   const [blocksPlaced, setBlocksPlaced] = useState(0);
@@ -78,8 +78,8 @@ const BlockPuzzleGame = () => {
   // Initialize game
   useEffect(() => {
     setCurrentPieces(generatePieces());
-    const saved = localStorage.getItem('blockPuzzleBestScore');
-    if (saved) setBestScore(parseInt(saved));
+    const saved = localStorage.getItem('blockPuzzleCoins');
+    if (saved) setCoins(parseInt(saved));
   }, []);
 
   // Check for complete lines (rows and columns)
@@ -229,16 +229,19 @@ const BlockPuzzleGame = () => {
     const clearedGrid = await clearLines(newGrid);
     setGrid(clearedGrid);
 
-    // Check for level up
+    // Check for level up when grid is cleared
     const totalBlocks = clearedGrid.flat().filter(cell => cell !== 0).length;
-    const piecesCleared = currentPieces.filter(p => p.used).length;
     
-    // Level up based on score thresholds
-    const newLevel = Math.floor(score / 5000) + 1;
-    if (newLevel > level) {
+    // Level up when all blocks are cleared
+    if (totalBlocks === 0) {
       setLevelUpAnimation(true);
-      setLevel(newLevel);
-      setScore(prev => prev + (newLevel * 1000)); // Level completion bonus
+      setLevel(prev => prev + 1);
+      setCoins(prev => {
+        const newCoins = prev + 5;
+        localStorage.setItem('blockPuzzleCoins', newCoins.toString());
+        return newCoins;
+      });
+      setScore(prev => prev + (level * 1000)); // Level completion bonus
       setTimeout(() => setLevelUpAnimation(false), 2000);
     }
   };
@@ -384,10 +387,6 @@ const BlockPuzzleGame = () => {
     // Check game over only if no pieces can be placed
     if (!canAnyPieceBePlaced()) {
       setGameOver(true);
-      if (score > bestScore) {
-        setBestScore(score);
-        localStorage.setItem('blockPuzzleBestScore', score.toString());
-      }
     }
   }, [currentPieces, grid]);
 
@@ -466,15 +465,17 @@ const BlockPuzzleGame = () => {
         )}
 
         {/* Header */}
-        <div className="bg-black/30 backdrop-blur-sm rounded-xl p-4 mb-4">
+        <div className="bg-gradient-to-r from-black/50 to-gray-900/50 backdrop-blur-md rounded-2xl p-6 mb-4 border border-white/20 shadow-2xl">
           <div className="flex justify-between items-center text-white">
             <div className="text-center">
               <div className="text-xs opacity-80">Score</div>
               <div className="font-bold text-lg">{score.toLocaleString()}</div>
             </div>
             <div className="text-center">
-              <div className="text-xs opacity-80">Best</div>
-              <div className="font-bold text-yellow-400">{bestScore.toLocaleString()}</div>
+              <div className="text-xs opacity-80">Coins</div>
+              <div className="font-bold text-yellow-400 flex items-center gap-1">
+                🪙 {coins}
+              </div>
             </div>
             <div className="text-center">
               <div className="text-xs opacity-80">Level</div>
@@ -499,8 +500,8 @@ const BlockPuzzleGame = () => {
         </div>
 
         {/* Game Grid */}
-        <div className="bg-black/40 backdrop-blur-sm rounded-xl p-4 mb-4">
-          <div className="game-grid grid grid-cols-10 gap-1 bg-gray-900 p-3 rounded-lg">
+        <div className="bg-gradient-to-br from-black/50 to-gray-900/60 backdrop-blur-md rounded-2xl p-6 mb-4 border border-white/20 shadow-2xl">
+          <div className="game-grid grid grid-cols-10 gap-2 bg-gradient-to-br from-gray-800 to-gray-900 p-4 rounded-xl border border-gray-700 shadow-inner">
             {grid.map((row, rowIndex) =>
               row.map((cell, colIndex) => {
                 const cellKey = `${rowIndex}-${colIndex}`;
@@ -509,7 +510,7 @@ const BlockPuzzleGame = () => {
                 return (
                   <div
                     key={cellKey}
-                    className={`w-7 h-7 rounded-sm border transition-all duration-300 ${
+                    className={`w-8 h-8 rounded-lg border-2 transition-all duration-300 ${
                       cell === 0 ? 'bg-gray-700 border-gray-600' : 'border-gray-400'
                     } ${shouldShowSnapPreview(rowIndex, colIndex) ? 'ring-2 ring-green-400' : ''}
                     ${isCleared ? 'animate-ping bg-yellow-400' : ''}`}
@@ -545,10 +546,7 @@ const BlockPuzzleGame = () => {
         </div>
 
         {/* Current Pieces */}
-        <div className="bg-black/30 backdrop-blur-sm rounded-xl p-4 mb-4">
-          <div className="text-white text-center text-sm mb-3 opacity-80">
-            Drag pieces - they'll snap to the nearest available space!
-          </div>
+        <div className="bg-gradient-to-r from-black/40 to-gray-900/40 backdrop-blur-md rounded-xl p-6 mb-4 border border-white/10 shadow-xl">
           <div className="flex justify-around items-center">
             {currentPieces.map((piece) => (
               <div
@@ -684,9 +682,9 @@ const BlockPuzzleGame = () => {
               <div className="text-center mb-6">
                 <div className="text-3xl font-bold text-purple-600 mb-2">{score.toLocaleString()}</div>
                 <div className="text-sm text-gray-600">Final Score</div>
-                {score === bestScore && score > 0 && (
-                  <div className="text-yellow-600 font-semibold mt-2">🎉 New Best Score!</div>
-                )}
+                <div className="text-yellow-600 font-semibold mt-2 flex items-center justify-center gap-2">
+                  🪙 {coins} Coins Earned
+                </div>
                 <div className="text-sm text-gray-600 mt-2">Level {level} Reached</div>
               </div>
               <button
