@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Star, Gift, Lightbulb } from 'lucide-react';
+import { Gift } from 'lucide-react';
 
 const BlockPuzzleGame = () => {
   const [score, setScore] = useState(0);
@@ -10,16 +10,30 @@ const BlockPuzzleGame = () => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [gameOver, setGameOver] = useState(false);
   const [coins, setCoins] = useState(0);
-  const [hintsRemaining, setHintsRemaining] = useState(3);
   const [showAdModal, setShowAdModal] = useState(false);
-  const [blocksPlaced, setBlocksPlaced] = useState(0);
+  const [isAutoAd, setIsAutoAd] = useState(false);
+  const [blocksCleared, setBlocksCleared] = useState(0);
+  const [isLevelComplete, setIsLevelComplete] = useState(false);
+  const [showLevelAnimation, setShowLevelAnimation] = useState(false);
+  const [comboCount, setComboCount] = useState(0);
+  const [showCombo, setShowCombo] = useState(false);
+  const [gameStartTime, setGameStartTime] = useState(Date.now());
+  const [lastAdTime, setLastAdTime] = useState(Date.now());
+  const [showCongratulations, setShowCongratulations] = useState(false);
+  const [explodingCells, setExplodingCells] = useState(new Set());
   const [clearedCells, setClearedCells] = useState(new Set());
   const [isClearing, setIsClearing] = useState(false);
   const [levelUpAnimation, setLevelUpAnimation] = useState(false);
-  const [comboCount, setComboCount] = useState(0);
 
-  // Beautiful color palette: purple, blue, green, yellow, orange, red
-  const colors = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#F97316', '#EF4444'];
+  // Beautiful modern color palette with gradients
+  const colors = [
+    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', // Purple gradient
+    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', // Pink gradient
+    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', // Blue gradient
+    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', // Green gradient
+    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', // Orange gradient
+    'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)', // Pastel gradient
+  ];
 
   // Generate proper piece shapes with correct sizes
   const generatePieceShapes = () => {
@@ -80,7 +94,22 @@ const BlockPuzzleGame = () => {
     setCurrentPieces(generatePieces());
     const saved = localStorage.getItem('blockPuzzleCoins');
     if (saved) setCoins(parseInt(saved));
+    setGameStartTime(Date.now());
+    setLastAdTime(Date.now());
   }, []);
+
+  // Auto ads every 2 minutes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      if (now - lastAdTime >= 120000) { // 2 minutes
+        setShowAdModal(true);
+        setLastAdTime(now);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [lastAdTime]);
 
   // Check for complete lines (rows and columns)
   const checkForCompleteLines = (newGrid) => {
@@ -107,20 +136,25 @@ const BlockPuzzleGame = () => {
     return Array.from(new Set(linesToClear)); // Remove duplicates
   };
 
-  // Clear completed lines with animation
+  // Clear completed lines with blast animation
   const clearLines = async (newGrid) => {
     const linesToClear = checkForCompleteLines(newGrid);
     
     if (linesToClear.length === 0) return newGrid;
     
     setIsClearing(true);
-    setClearedCells(new Set(linesToClear));
+    setExplodingCells(new Set(linesToClear));
+    
+    // Sound effect simulation (visual feedback)
+    console.log('💥 BLAST! Lines cleared!');
     
     // Wait for blast animation
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 600));
     
     // Calculate cleared blocks and bonus
     const clearedBlocks = linesToClear.length;
+    setBlocksCleared(prev => prev + clearedBlocks);
+    
     const linesCleared = Math.min(
       new Set(linesToClear.map(pos => pos.split('-')[0])).size + // rows
       new Set(linesToClear.map(pos => pos.split('-')[1])).size   // columns
@@ -134,6 +168,11 @@ const BlockPuzzleGame = () => {
     setScore(prev => prev + lineBonus + blockBonus + comboBonus);
     setComboCount(prev => prev + 1);
     
+    if (comboCount > 0) {
+      setShowCombo(true);
+      setTimeout(() => setShowCombo(false), 1500);
+    }
+    
     // Clear the lines
     const clearedGrid = newGrid.map((row, rowIndex) =>
       row.map((cell, colIndex) => {
@@ -144,7 +183,7 @@ const BlockPuzzleGame = () => {
       })
     );
     
-    setClearedCells(new Set());
+    setExplodingCells(new Set());
     setIsClearing(false);
     
     // Check for more lines after clearing
@@ -178,7 +217,7 @@ const BlockPuzzleGame = () => {
     return true;
   };
 
-  // Find the closest valid position for a piece
+  // Find the closest valid position for a piece (responsive blocks)
   const findClosestValidPosition = (piece, targetRow, targetCol) => {
     let bestPosition = null;
     let minDistance = Infinity;
@@ -214,6 +253,9 @@ const BlockPuzzleGame = () => {
       }
     }
     
+    // Sound effect simulation
+    console.log('🔊 Block placed sound');
+    
     // Mark piece as used
     setCurrentPieces(prev => 
       prev.map(p => p.id === piece.id ? { ...p, used: true } : p)
@@ -223,18 +265,17 @@ const BlockPuzzleGame = () => {
     const baseScore = blocksAdded * 10;
     const levelBonus = level * 5;
     setScore(prev => prev + baseScore + levelBonus);
-    setBlocksPlaced(prev => prev + blocksAdded);
 
     // Check for line clears
     const clearedGrid = await clearLines(newGrid);
     setGrid(clearedGrid);
 
-    // Check for level up when grid is cleared
+    // Check level progression: 15-20 blocks cleared OR board cleared after 40 seconds
+    const gameTime = (Date.now() - gameStartTime) / 1000;
     const totalBlocks = clearedGrid.flat().filter(cell => cell !== 0).length;
     
-    // Level up when all blocks are cleared
-    if (totalBlocks === 0) {
-      setLevelUpAnimation(true);
+    if (blocksCleared >= 15 || (totalBlocks === 0 && gameTime >= 40)) {
+      setShowCongratulations(true);
       setLevel(prev => prev + 1);
       setCoins(prev => {
         const newCoins = prev + 5;
@@ -242,7 +283,8 @@ const BlockPuzzleGame = () => {
         return newCoins;
       });
       setScore(prev => prev + (level * 1000)); // Level completion bonus
-      setTimeout(() => setLevelUpAnimation(false), 2000);
+      setBlocksCleared(0);
+      setGameStartTime(Date.now());
     }
   };
 
@@ -372,7 +414,7 @@ const BlockPuzzleGame = () => {
     return false;
   };
 
-  // Game state management
+  // Auto restart when game over
   useEffect(() => {
     const availablePieces = currentPieces.filter(p => !p.used);
     
@@ -384,53 +426,33 @@ const BlockPuzzleGame = () => {
       return;
     }
     
-    // Check game over only if no pieces can be placed
-    if (!canAnyPieceBePlaced()) {
-      setGameOver(true);
+    // Auto restart when board is full and no moves possible
+    const totalBlocks = grid.flat().filter(cell => cell !== 0).length;
+    if (totalBlocks === 100 && !canAnyPieceBePlaced()) {
+      setTimeout(() => {
+        setGrid(Array(10).fill(null).map(() => Array(10).fill(0)));
+        setCurrentPieces(generatePieces());
+        setGameStartTime(Date.now());
+      }, 1000);
     }
   }, [currentPieces, grid]);
 
-  // Handle hint button
-  const handleHint = () => {
-    if (hintsRemaining > 0) {
-      setShowAdModal(true);
-    }
+  // Get Coins button handler
+  const handleGetCoins = () => {
+    setShowAdModal(true);
   };
 
-  // Watch ad for hint
+  // Watch ad for coins
   const watchAd = () => {
     setTimeout(() => {
       setShowAdModal(false);
-      setHintsRemaining(prev => prev - 1);
-      
-      // Find and highlight a possible move
-      const availablePieces = currentPieces.filter(p => !p.used);
-      for (let piece of availablePieces) {
-        for (let row = 0; row <= 10 - piece.shape.length; row++) {
-          for (let col = 0; col <= 10 - (piece.shape[0]?.length || 0); col++) {
-            if (canPlacePieceAt(piece, row, col)) {
-              alert(`Hint: Try placing the ${piece.shape.flat().filter(c => c === 1).length}-block piece near row ${row + 1}, column ${col + 1}!`);
-              return;
-            }
-          }
-        }
-      }
+      const coinsEarned = showAdModal === 'auto' ? 4.5 : 2;
+      setCoins(prev => {
+        const newCoins = prev + coinsEarned;
+        localStorage.setItem('blockPuzzleCoins', newCoins.toString());
+        return newCoins;
+      });
     }, 3000);
-  };
-
-  // Reset game
-  const resetGame = () => {
-    setGrid(Array(10).fill(null).map(() => Array(10).fill(0)));
-    setCurrentPieces(generatePieces());
-    setScore(0);
-    setLevel(1);
-    setGameOver(false);
-    setHintsRemaining(3);
-    setBlocksPlaced(0);
-    setClearedCells(new Set());
-    setIsClearing(false);
-    setComboCount(0);
-    setLevelUpAnimation(false);
   };
 
   // Check if grid cell should show snap preview
@@ -447,114 +469,133 @@ const BlockPuzzleGame = () => {
     return false;
   };
 
-  const filledCells = grid.flat().filter(cell => cell !== 0).length;
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
-      <div className="max-w-md mx-auto">
-        {/* Level Up Animation */}
-        {levelUpAnimation && (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-4 relative overflow-hidden">
+      {/* Background effects */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-600/20 via-transparent to-transparent"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-600/20 via-transparent to-transparent"></div>
+      
+      <div className="max-w-md mx-auto relative z-10">
+        {/* Combo Animation */}
+        {showCombo && (
           <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
             <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-8 py-4 rounded-2xl shadow-2xl transform animate-bounce">
               <div className="text-center">
-                <div className="text-3xl font-bold">🎉 LEVEL UP! 🎉</div>
-                <div className="text-xl mt-2">Level {level}</div>
+                <div className="text-3xl font-bold">🔥 COMBO x{comboCount} 🔥</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Congratulations Modal */}
+        {showCongratulations && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-md rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-white/20 transform animate-scale-in">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🎉</div>
+                <h3 className="text-3xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Congratulations!
+                </h3>
+                <div className="text-xl font-semibold text-gray-800 mb-6">
+                  Level {level} Complete!
+                </div>
+                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-3 rounded-xl font-bold text-lg mb-6">
+                  +5 Coins Earned! 🪙
+                </div>
+                <button
+                  onClick={() => setShowCongratulations(false)}
+                  className="w-full py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-xl font-semibold hover:from-purple-600 hover:to-blue-600 transition-all duration-200 shadow-lg"
+                >
+                  Continue Playing
+                </button>
               </div>
             </div>
           </div>
         )}
 
         {/* Header */}
-        <div className="bg-gradient-to-r from-black/50 to-gray-900/50 backdrop-blur-md rounded-2xl p-6 mb-4 border border-white/20 shadow-2xl">
+        <div className="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md rounded-3xl p-6 mb-6 border border-white/20 shadow-2xl">
           <div className="flex justify-between items-center text-white">
             <div className="text-center">
-              <div className="text-xs opacity-80">Score</div>
-              <div className="font-bold text-lg">{score.toLocaleString()}</div>
+              <div className="text-xs opacity-80 uppercase tracking-wide">Score</div>
+              <div className="font-bold text-xl bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+                {score.toLocaleString()}
+              </div>
             </div>
             <div className="text-center">
-              <div className="text-xs opacity-80">Coins</div>
-              <div className="font-bold text-yellow-400 flex items-center gap-1">
+              <div className="text-xs opacity-80 uppercase tracking-wide">Coins</div>
+              <div className="font-bold text-xl text-yellow-400 flex items-center gap-1">
                 🪙 {coins}
               </div>
             </div>
             <div className="text-center">
-              <div className="text-xs opacity-80">Level</div>
-              <div className={`font-bold text-2xl ${levelUpAnimation ? 'animate-pulse text-yellow-400' : 'text-green-400'}`}>
+              <div className="text-xs opacity-80 uppercase tracking-wide">Level</div>
+              <div className="font-bold text-3xl bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent animate-pulse">
                 {level}
               </div>
             </div>
-            <div className="text-center">
-              <div className="text-xs opacity-80">Hints</div>
-              <div className="font-bold text-green-400">{hintsRemaining}</div>
-            </div>
           </div>
           
-          {/* Combo indicator */}
-          {comboCount > 0 && (
-            <div className="mt-2 text-center">
-              <div className="text-yellow-400 font-bold animate-pulse">
-                🔥 COMBO x{comboCount} 🔥
-              </div>
-            </div>
-          )}
+          {/* Get Coins Button */}
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={handleGetCoins}
+              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105"
+            >
+              <Gift className="w-5 h-5" />
+              <span>Get Coins</span>
+            </button>
+          </div>
         </div>
 
         {/* Game Grid */}
-        <div className="bg-gradient-to-br from-black/50 to-gray-900/60 backdrop-blur-md rounded-2xl p-6 mb-4 border border-white/20 shadow-2xl">
-          <div className="game-grid grid grid-cols-10 gap-2 bg-gradient-to-br from-gray-800 to-gray-900 p-4 rounded-xl border border-gray-700 shadow-inner">
+        <div className="bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-md rounded-3xl p-6 mb-6 border border-white/20 shadow-2xl">
+          <div className="game-grid grid grid-cols-10 gap-2 bg-gradient-to-br from-black/30 to-black/10 p-4 rounded-2xl border border-white/10 shadow-inner">
             {grid.map((row, rowIndex) =>
               row.map((cell, colIndex) => {
                 const cellKey = `${rowIndex}-${colIndex}`;
-                const isCleared = clearedCells.has(cellKey);
+                const isExploding = explodingCells.has(cellKey);
                 
                 return (
                   <div
                     key={cellKey}
-                    className={`w-8 h-8 rounded-lg border-2 transition-all duration-300 ${
-                      cell === 0 ? 'bg-gray-700 border-gray-600' : 'border-gray-400'
-                    } ${shouldShowSnapPreview(rowIndex, colIndex) ? 'ring-2 ring-green-400' : ''}
-                    ${isCleared ? 'animate-ping bg-yellow-400' : ''}`}
+                    className={`w-8 h-8 rounded-xl border-2 transition-all duration-300 ${
+                      cell === 0 ? 'bg-white/10 border-white/20' : 'border-white/30'
+                    } ${shouldShowSnapPreview(rowIndex, colIndex) ? 'ring-2 ring-green-400 ring-opacity-60' : ''}
+                    ${isExploding ? 'animate-ping bg-yellow-400 scale-125' : ''}`}
                     style={{
-                      backgroundColor: cell !== 0 
-                        ? isCleared 
-                          ? '#FCD34D'
+                      background: cell !== 0 
+                        ? isExploding 
+                          ? 'radial-gradient(circle, #FCD34D, #F59E0B)'
                           : cell 
                         : shouldShowSnapPreview(rowIndex, colIndex) 
-                          ? `${draggedPiece?.color}60`
+                          ? 'rgba(34, 197, 94, 0.3)'
                           : '',
-                      boxShadow: cell !== 0 && !isCleared ? 'inset 0 1px 2px rgba(255,255,255,0.2)' : '',
-                      border: cell === '#FFFFFF' ? '1px solid #CBD5E0' : '',
-                      transform: isCleared ? 'scale(1.2)' : 'scale(1)',
-                      zIndex: isCleared ? 10 : 'auto'
+                      boxShadow: cell !== 0 && !isExploding 
+                        ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.2)' 
+                        : isExploding
+                          ? '0 0 20px #F59E0B, 0 0 40px #F59E0B'
+                          : '',
+                      transform: isExploding ? 'scale(1.3) rotate(45deg)' : 'scale(1)',
+                      zIndex: isExploding ? 10 : 'auto'
                     }}
                   />
                 );
               })
             )}
           </div>
-          
-          {/* Game Info */}
-          <div className="mt-3">
-            <div className="flex justify-between text-white text-xs mb-2">
-              <span>Clear rows & columns to score!</span>
-              <span>{filledCells}/100 blocks</span>
-            </div>
-            <div className="text-center text-white text-xs mb-2">
-              Next Level: {Math.max(0, ((Math.floor(score / 5000) + 1) * 5000) - score).toLocaleString()} points
-            </div>
-          </div>
         </div>
 
         {/* Current Pieces */}
-        <div className="bg-gradient-to-r from-black/40 to-gray-900/40 backdrop-blur-md rounded-xl p-6 mb-4 border border-white/10 shadow-xl">
+        <div className="bg-gradient-to-r from-white/15 to-white/5 backdrop-blur-md rounded-2xl p-6 mb-6 border border-white/10 shadow-xl">
           <div className="flex justify-around items-center">
             {currentPieces.map((piece) => (
               <div
                 key={piece.id}
-                className={`cursor-pointer transition-all duration-200 select-none p-2 rounded-lg ${
+                className={`cursor-pointer transition-all duration-300 select-none p-3 rounded-xl ${
                   piece.used 
-                    ? 'opacity-30' 
-                    : 'hover:scale-110 active:scale-95 hover:bg-white/10'
+                    ? 'opacity-30 scale-75' 
+                    : 'hover:scale-110 active:scale-95 hover:bg-white/10 hover:shadow-lg'
                 }`}
                 onMouseDown={(e) => handlePieceStart(e, piece)}
                 onTouchStart={(e) => handlePieceStart(e, piece)}
@@ -570,13 +611,13 @@ const BlockPuzzleGame = () => {
                       {row.map((cell, colIndex) => (
                         <div
                           key={colIndex}
-                          className={`w-4 h-4 rounded-sm ${
+                          className={`w-5 h-5 rounded-lg transition-all duration-200 ${
                             cell === 1 ? 'shadow-lg' : ''
                           }`}
                           style={{
-                            backgroundColor: cell === 1 ? piece.color : 'transparent',
-                            boxShadow: cell === 1 ? 'inset 0 1px 2px rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.2)' : '',
-                            border: cell === 1 && piece.color === '#FFFFFF' ? '1px solid #CBD5E0' : 'none'
+                            background: cell === 1 ? piece.color : 'transparent',
+                            boxShadow: cell === 1 ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.3)' : '',
+                            border: cell === 1 ? '1px solid rgba(255,255,255,0.3)' : 'none'
                           }}
                         />
                       ))}
@@ -591,12 +632,12 @@ const BlockPuzzleGame = () => {
         {/* Dragged Piece Overlay */}
         {isDragging && draggedPiece && (
           <div
-            className="fixed pointer-events-none z-50 opacity-90"
+            className="fixed pointer-events-none z-50 opacity-95"
             style={{
               left: draggedPiecePosition.x - dragOffset.x,
               top: draggedPiecePosition.y - dragOffset.y,
-              transform: 'scale(1.2) rotate(3deg)',
-              filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.4))'
+              transform: 'scale(1.3) rotate(5deg)',
+              filter: 'drop-shadow(0 12px 24px rgba(0,0,0,0.5))'
             }}
           >
             <div className="grid gap-1">
@@ -605,13 +646,13 @@ const BlockPuzzleGame = () => {
                   {row.map((cell, colIndex) => (
                     <div
                       key={colIndex}
-                      className={`w-4 h-4 rounded-sm ${
+                      className={`w-5 h-5 rounded-lg ${
                         cell === 1 ? 'shadow-lg' : ''
                       }`}
                       style={{
-                        backgroundColor: cell === 1 ? draggedPiece.color : 'transparent',
-                        boxShadow: cell === 1 ? 'inset 0 1px 2px rgba(255,255,255,0.3), 0 4px 12px rgba(0,0,0,0.4)' : '',
-                        border: cell === 1 && draggedPiece.color === '#FFFFFF' ? '2px solid #CBD5E0' : 'none'
+                        background: cell === 1 ? draggedPiece.color : 'transparent',
+                        boxShadow: cell === 1 ? 'inset 0 2px 4px rgba(255,255,255,0.4), 0 8px 16px rgba(0,0,0,0.4)' : '',
+                        border: cell === 1 ? '2px solid rgba(255,255,255,0.5)' : 'none'
                       }}
                     />
                   ))}
@@ -621,78 +662,32 @@ const BlockPuzzleGame = () => {
           </div>
         )}
 
-        {/* Control Buttons */}
-        <div className="flex justify-center space-x-4 mb-4">
-          <button
-            onClick={handleHint}
-            disabled={hintsRemaining === 0}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
-              hintsRemaining > 0
-                ? 'bg-green-500 hover:bg-green-600 text-white'
-                : 'bg-gray-500 text-gray-300 cursor-not-allowed'
-            }`}
-          >
-            <Lightbulb className="w-4 h-4" />
-            <span>Hint</span>
-          </button>
-          
-          <button
-            onClick={resetGame}
-            className="flex items-center space-x-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-all duration-200"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>Reset</span>
-          </button>
-        </div>
-
         {/* Ad Modal */}
         {showAdModal && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 max-w-sm mx-4">
-              <h3 className="text-xl font-bold mb-4 text-center">Watch Ad for Hint</h3>
-              <div className="bg-gray-200 h-40 rounded-lg flex items-center justify-center mb-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-gradient-to-br from-white/95 to-white/80 backdrop-blur-md rounded-2xl p-6 max-w-sm mx-4 border border-white/20 shadow-2xl">
+              <h3 className="text-xl font-bold mb-4 text-center text-gray-800">Watch Ad for Coins</h3>
+              <div className="bg-gradient-to-br from-gray-200 to-gray-300 h-40 rounded-xl flex items-center justify-center mb-4 border shadow-inner">
                 <div className="text-center">
-                  <div className="text-4xl mb-2">📺</div>
-                  <div className="text-sm text-gray-600">Watching Ad...</div>
+                  <div className="text-4xl mb-2 animate-pulse">📺</div>
+                  <div className="text-sm text-gray-600 font-medium">Test Ad Playing...</div>
+                  <div className="text-xs text-gray-500 mt-1">3 seconds remaining</div>
                 </div>
               </div>
               <div className="flex space-x-3">
                 <button
                   onClick={() => setShowAdModal(false)}
-                  className="flex-1 py-2 bg-gray-500 text-white rounded-lg font-semibold"
+                  className="flex-1 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold transition-all duration-200"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={watchAd}
-                  className="flex-1 py-2 bg-green-500 text-white rounded-lg font-semibold"
+                  className="flex-1 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-lg font-semibold transition-all duration-200"
                 >
-                  Watch Ad
+                  Claim Coins
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Game Over Modal */}
-        {gameOver && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-              <h3 className="text-2xl font-bold mb-4 text-center text-gray-800">Game Over!</h3>
-              <div className="text-center mb-6">
-                <div className="text-3xl font-bold text-purple-600 mb-2">{score.toLocaleString()}</div>
-                <div className="text-sm text-gray-600">Final Score</div>
-                <div className="text-yellow-600 font-semibold mt-2 flex items-center justify-center gap-2">
-                  🪙 {coins} Coins Earned
-                </div>
-                <div className="text-sm text-gray-600 mt-2">Level {level} Reached</div>
-              </div>
-              <button
-                onClick={resetGame}
-                className="w-full py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-xl font-semibold hover:from-purple-600 hover:to-blue-600 transition-all duration-200 shadow-lg"
-              >
-                Play Again
-              </button>
             </div>
           </div>
         )}
