@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Gift } from 'lucide-react';
 
 const BlockPuzzleGame = () => {
@@ -10,20 +10,16 @@ const BlockPuzzleGame = () => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [gameOver, setGameOver] = useState(false);
   const [coins, setCoins] = useState(0);
-  const [showAdModal, setShowAdModal] = useState(false);
-  const [isAutoAd, setIsAutoAd] = useState(false);
+  const [showAdModal, setShowAdModal] = useState<'manual' | 'auto' | false>(false);
   const [blocksCleared, setBlocksCleared] = useState(0);
-  const [isLevelComplete, setIsLevelComplete] = useState(false);
-  const [showLevelAnimation, setShowLevelAnimation] = useState(false);
   const [comboCount, setComboCount] = useState(0);
   const [showCombo, setShowCombo] = useState(false);
   const [gameStartTime, setGameStartTime] = useState(Date.now());
   const [lastAdTime, setLastAdTime] = useState(Date.now());
   const [showCongratulations, setShowCongratulations] = useState(false);
   const [explodingCells, setExplodingCells] = useState(new Set());
-  const [clearedCells, setClearedCells] = useState(new Set());
   const [isClearing, setIsClearing] = useState(false);
-  const [levelUpAnimation, setLevelUpAnimation] = useState(false);
+  const [adCountdown, setAdCountdown] = useState(3);
 
   // Beautiful modern color palette with gradients
   const colors = [
@@ -103,13 +99,35 @@ const BlockPuzzleGame = () => {
     const interval = setInterval(() => {
       const now = Date.now();
       if (now - lastAdTime >= 120000) { // 2 minutes
-        setShowAdModal(true);
+        setShowAdModal('auto');
         setLastAdTime(now);
       }
     }, 5000); // Check every 5 seconds
 
     return () => clearInterval(interval);
   }, [lastAdTime]);
+
+  // Ad countdown effect
+  useEffect(() => {
+    let countdownInterval: NodeJS.Timeout;
+    
+    if (showAdModal) {
+      setAdCountdown(3);
+      countdownInterval = setInterval(() => {
+        setAdCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (countdownInterval) clearInterval(countdownInterval);
+    };
+  }, [showAdModal]);
 
   // Check for complete lines (rows and columns)
   const checkForCompleteLines = (newGrid) => {
@@ -437,22 +455,24 @@ const BlockPuzzleGame = () => {
     }
   }, [currentPieces, grid]);
 
-  // Get Coins button handler
+  // Get Coins button handler - Shows test reward ad
   const handleGetCoins = () => {
-    setShowAdModal(true);
+    setShowAdModal('manual');
   };
 
-  // Watch ad for coins
+  // Watch ad for coins - Test ad completion
   const watchAd = () => {
+    const coinsEarned = showAdModal === 'auto' ? 4.5 : 2;
+    
     setTimeout(() => {
       setShowAdModal(false);
-      const coinsEarned = showAdModal === 'auto' ? 4.5 : 2;
       setCoins(prev => {
         const newCoins = prev + coinsEarned;
         localStorage.setItem('blockPuzzleCoins', newCoins.toString());
         return newCoins;
       });
-    }, 3000);
+      console.log(`🪙 Earned ${coinsEarned} coins from ${showAdModal} ad!`);
+    }, 500);
   };
 
   // Check if grid cell should show snap preview
@@ -662,16 +682,23 @@ const BlockPuzzleGame = () => {
           </div>
         )}
 
-        {/* Ad Modal */}
+        {/* Test Ad Modal */}
         {showAdModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-gradient-to-br from-white/95 to-white/80 backdrop-blur-md rounded-2xl p-6 max-w-sm mx-4 border border-white/20 shadow-2xl">
-              <h3 className="text-xl font-bold mb-4 text-center text-gray-800">Watch Ad for Coins</h3>
+              <h3 className="text-xl font-bold mb-4 text-center text-gray-800">
+                {showAdModal === 'auto' ? 'Bonus Coins!' : 'Watch Ad for Coins'}
+              </h3>
               <div className="bg-gradient-to-br from-gray-200 to-gray-300 h-40 rounded-xl flex items-center justify-center mb-4 border shadow-inner">
                 <div className="text-center">
                   <div className="text-4xl mb-2 animate-pulse">📺</div>
                   <div className="text-sm text-gray-600 font-medium">Test Ad Playing...</div>
-                  <div className="text-xs text-gray-500 mt-1">3 seconds remaining</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {adCountdown > 0 ? `${adCountdown} seconds remaining` : 'Ready to claim!'}
+                  </div>
+                  <div className="text-xs text-green-600 mt-2 font-semibold">
+                    +{showAdModal === 'auto' ? '4.5' : '2'} coins 🪙
+                  </div>
                 </div>
               </div>
               <div className="flex space-x-3">
@@ -683,9 +710,14 @@ const BlockPuzzleGame = () => {
                 </button>
                 <button
                   onClick={watchAd}
-                  className="flex-1 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-lg font-semibold transition-all duration-200"
+                  disabled={adCountdown > 0}
+                  className={`flex-1 py-2 rounded-lg font-semibold transition-all duration-200 ${
+                    adCountdown > 0 
+                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                      : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white'
+                  }`}
                 >
-                  Claim Coins
+                  {adCountdown > 0 ? `Wait ${adCountdown}s` : 'Claim Coins'}
                 </button>
               </div>
             </div>
