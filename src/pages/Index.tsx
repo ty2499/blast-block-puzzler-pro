@@ -24,13 +24,14 @@ const BlockPuzzleGame = () => {
   const [paypalEmail, setPaypalEmail] = useState('');
   const [cashAppUsername, setCashAppUsername] = useState('');
 
-  // Clean modern color palette
+  // Beautiful modern color palette with gradients
   const colors = [
-    '#3B82F6', // Blue
-    '#EF4444', // Red
-    '#FBBF24', // Yellow
-    '#8B5CF6', // Purple
-    '#FFFFFF', // White
+    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', // Purple gradient
+    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', // Pink gradient
+    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', // Blue gradient
+    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', // Green gradient
+    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', // Orange gradient
+    'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)', // Pastel gradient
   ];
 
   // Generate proper piece shapes with correct sizes
@@ -530,10 +531,10 @@ const BlockPuzzleGame = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-100 to-teal-200 p-4 relative overflow-hidden">
-      {/* Modern mountain background effects */}
-      <div className="absolute inset-0 bg-gradient-to-t from-green-200/30 via-emerald-100/20 to-transparent"></div>
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-green-300/10 via-transparent to-transparent"></div>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-4 relative overflow-hidden">
+      {/* Background effects */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-600/20 via-transparent to-transparent"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-600/20 via-transparent to-transparent"></div>
       
       <div className="max-w-md mx-auto relative z-10">
         {/* Combo Animation */}
@@ -574,25 +575,25 @@ const BlockPuzzleGame = () => {
         )}
 
         {/* Header - Responsive Top Bar */}
-        <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 sm:p-6 mb-6 border border-white/40 shadow-lg">
+        <div className="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md rounded-3xl p-4 sm:p-6 mb-6 border border-white/20 shadow-2xl">
           {/* Top row with stats and buttons */}
           <div className="flex flex-wrap items-center justify-between gap-4 text-white">
             {/* Stats Row */}
-            <div className="flex items-center gap-4 sm:gap-6 text-gray-800">
+            <div className="flex items-center gap-4 sm:gap-6">
               <div className="text-center">
-                <div className="text-xs opacity-70 uppercase tracking-wide">Score</div>
+                <div className="text-xs opacity-80 uppercase tracking-wide">Score</div>
                 <div className="font-bold text-lg sm:text-xl bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
                   {score.toLocaleString()}
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-xs opacity-70 uppercase tracking-wide">Coins</div>
-                <div className="font-bold text-lg sm:text-xl text-amber-600 flex items-center gap-1 cursor-pointer" onClick={() => setShowWithdrawModal(true)}>
+                <div className="text-xs opacity-80 uppercase tracking-wide">Coins</div>
+                <div className="font-bold text-lg sm:text-xl text-yellow-400 flex items-center gap-1 cursor-pointer" onClick={() => setShowWithdrawModal(true)}>
                   🪙 {coins}
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-xs opacity-70 uppercase tracking-wide">Level</div>
+                <div className="text-xs opacity-80 uppercase tracking-wide">Level</div>
                 <div className="font-bold text-2xl sm:text-3xl bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent animate-pulse">
                   {level}
                 </div>
@@ -623,8 +624,8 @@ const BlockPuzzleGame = () => {
         </div>
 
         {/* Game Grid */}
-        <div className="bg-white/90 backdrop-blur-md rounded-3xl p-6 mb-6 border border-white/40 shadow-lg">
-          <div className="game-grid grid grid-cols-10 gap-2 bg-gray-100 p-4 rounded-2xl border border-gray-200 shadow-inner">
+        <div className="bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-md rounded-3xl p-6 mb-6 border border-white/20 shadow-2xl">
+          <div className="game-grid grid grid-cols-10 gap-2 bg-gradient-to-br from-black/30 to-black/10 p-4 rounded-2xl border border-white/10 shadow-inner">
             {grid.map((row, rowIndex) =>
               row.map((cell, colIndex) => {
                 const cellKey = `${rowIndex}-${colIndex}`;
@@ -633,8 +634,8 @@ const BlockPuzzleGame = () => {
                 return (
                   <div
                     key={cellKey}
-                    className={`w-8 h-8 rounded-lg border transition-all duration-300 ${
-                      cell === 0 ? 'bg-white border-gray-300' : 'border-gray-400'
+                    className={`w-8 h-8 rounded-xl border-2 transition-all duration-300 ${
+                      cell === 0 ? 'bg-white/10 border-white/20' : 'border-white/30'
                     } ${shouldShowSnapPreview(rowIndex, colIndex) ? 'ring-2 ring-green-400 ring-opacity-60' : ''}
                     ${isExploding ? 'animate-ping bg-yellow-400 scale-125' : ''}`}
                     style={{
@@ -645,7 +646,9 @@ const BlockPuzzleGame = () => {
                         : shouldShowSnapPreview(rowIndex, colIndex) 
                           ? 'rgba(34, 197, 94, 0.3)'
                           : '',
-                      boxShadow: isExploding
+                      boxShadow: cell !== 0 && !isExploding 
+                        ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.2)' 
+                        : isExploding
                           ? '0 0 20px #F59E0B, 0 0 40px #F59E0B'
                           : '',
                       transform: isExploding ? 'scale(1.3) rotate(45deg)' : 'scale(1)',
@@ -659,7 +662,7 @@ const BlockPuzzleGame = () => {
         </div>
 
         {/* Current Pieces */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-6 mb-6 border border-white/40 shadow-lg">
+        <div className="bg-gradient-to-r from-white/15 to-white/5 backdrop-blur-md rounded-2xl p-6 mb-6 border border-white/10 shadow-xl">
           <div className="flex justify-around items-center">
             {currentPieces.map((piece) => (
               <div
@@ -667,7 +670,7 @@ const BlockPuzzleGame = () => {
                 className={`cursor-pointer transition-all duration-300 select-none p-3 rounded-xl ${
                   piece.used 
                     ? 'opacity-30 scale-75' 
-                    : 'hover:scale-110 active:scale-95 hover:bg-gray-100/50'
+                    : 'hover:scale-110 active:scale-95 hover:bg-white/10 hover:shadow-lg'
                 }`}
                 onMouseDown={(e) => handlePieceStart(e, piece)}
                 onTouchStart={(e) => handlePieceStart(e, piece)}
@@ -684,11 +687,12 @@ const BlockPuzzleGame = () => {
                         <div
                           key={colIndex}
                           className={`w-5 h-5 rounded-lg transition-all duration-200 ${
-                            cell === 1 ? '' : ''
+                            cell === 1 ? 'shadow-lg' : ''
                           }`}
                           style={{
                             background: cell === 1 ? piece.color : 'transparent',
-                            border: cell === 1 ? (piece.color === '#FFFFFF' ? '1px solid #D1D5DB' : 'none') : 'none'
+                            boxShadow: cell === 1 ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.3)' : '',
+                            border: cell === 1 ? '1px solid rgba(255,255,255,0.3)' : 'none'
                           }}
                         />
                       ))}
@@ -718,11 +722,12 @@ const BlockPuzzleGame = () => {
                     <div
                       key={colIndex}
                       className={`w-5 h-5 rounded-lg ${
-                        cell === 1 ? '' : ''
+                        cell === 1 ? 'shadow-lg' : ''
                       }`}
                       style={{
                         background: cell === 1 ? draggedPiece.color : 'transparent',
-                        border: cell === 1 ? (draggedPiece.color === '#FFFFFF' ? '2px solid #D1D5DB' : 'none') : 'none'
+                        boxShadow: cell === 1 ? 'inset 0 2px 4px rgba(255,255,255,0.4), 0 8px 16px rgba(0,0,0,0.4)' : '',
+                        border: cell === 1 ? '2px solid rgba(255,255,255,0.5)' : 'none'
                       }}
                     />
                   ))}
