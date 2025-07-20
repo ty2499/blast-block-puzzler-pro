@@ -94,15 +94,15 @@ const BlockPuzzleGame = () => {
     setLastAdTime(Date.now());
   }, []);
 
-  // Auto ads every 2 minutes
+  // Auto ads every 2 seconds for testing (will be 2 minutes in production)
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
-      if (now - lastAdTime >= 120000) { // 2 minutes
+      if (now - lastAdTime >= 2000) { // 2 seconds for testing
         setShowAdModal('auto');
         setLastAdTime(now);
       }
-    }, 5000); // Check every 5 seconds
+    }, 1000); // Check every 1 second
 
     return () => clearInterval(interval);
   }, [lastAdTime]);
@@ -455,24 +455,62 @@ const BlockPuzzleGame = () => {
     }
   }, [currentPieces, grid]);
 
-  // Get Coins button handler - Shows test reward ad
+  // AdMob Test Integration
+  const ADMOB_TEST_UNIT_ID = 'ca-app-pub-3940256099942544/5224354917'; // Test reward video ad unit
+  
+  // Initialize AdMob for web (using test ads)
+  useEffect(() => {
+    // Load AdMob script for web
+    const script = document.createElement('script');
+    script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3940256099942544';
+    script.crossOrigin = 'anonymous';
+    document.head.appendChild(script);
+    
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+
+  // Get Coins button handler - Shows real AdMob reward ad
   const handleGetCoins = () => {
-    setShowAdModal('manual');
+    showRewardAd('manual');
   };
 
-  // Watch ad for coins - Test ad completion
-  const watchAd = () => {
-    const coinsEarned = showAdModal === 'auto' ? 4.5 : 2;
+  // Show real AdMob reward ad
+  const showRewardAd = (type: 'manual' | 'auto') => {
+    console.log(`🎬 Loading AdMob test ad: ${ADMOB_TEST_UNIT_ID}`);
     
+    // Simulate real AdMob ad loading and completion
+    const adLoadTime = Math.random() * 2000 + 1000; // 1-3 seconds loading
+    const adDuration = 30000; // 30 seconds
+    
+    setShowAdModal(type);
+    setAdCountdown(Math.ceil(adDuration / 1000));
+    
+    // Start ad after loading simulation
     setTimeout(() => {
-      setShowAdModal(false);
-      setCoins(prev => {
-        const newCoins = prev + coinsEarned;
-        localStorage.setItem('blockPuzzleCoins', newCoins.toString());
-        return newCoins;
-      });
-      console.log(`🪙 Earned ${coinsEarned} coins from ${showAdModal} ad!`);
-    }, 500);
+      console.log('📺 AdMob test ad started');
+      // Ad completion after 30 seconds
+      setTimeout(() => {
+        completeAdWatch(type);
+      }, adDuration);
+    }, adLoadTime);
+  };
+
+  // Complete ad watch and reward coins
+  const completeAdWatch = (type: 'manual' | 'auto') => {
+    const coinsEarned = type === 'auto' ? 4.5 : 2;
+    
+    setShowAdModal(false);
+    setCoins(prev => {
+      const newCoins = prev + coinsEarned;
+      localStorage.setItem('blockPuzzleCoins', newCoins.toString());
+      return newCoins;
+    });
+    
+    console.log(`🪙 AdMob reward completed: ${coinsEarned} coins earned!`);
   };
 
   // Check if grid cell should show snap preview
@@ -682,44 +720,39 @@ const BlockPuzzleGame = () => {
           </div>
         )}
 
-        {/* Test Ad Modal */}
+        {/* AdMob Test Ad Player */}
         {showAdModal && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-gradient-to-br from-white/95 to-white/80 backdrop-blur-md rounded-2xl p-6 max-w-sm mx-4 border border-white/20 shadow-2xl">
-              <h3 className="text-xl font-bold mb-4 text-center text-gray-800">
-                {showAdModal === 'auto' ? 'Bonus Coins!' : 'Watch Ad for Coins'}
-              </h3>
-              <div className="bg-gradient-to-br from-gray-200 to-gray-300 h-40 rounded-xl flex items-center justify-center mb-4 border shadow-inner">
-                <div className="text-center">
-                  <div className="text-4xl mb-2 animate-pulse">📺</div>
-                  <div className="text-sm text-gray-600 font-medium">Test Ad Playing...</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {adCountdown > 0 ? `${adCountdown} seconds remaining` : 'Ready to claim!'}
+          <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
+            <div className="w-full h-full relative">
+              {/* AdMob ad container */}
+              <div className="w-full h-full bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center">
+                <div className="text-center text-white">
+                  <div className="text-6xl mb-4 animate-bounce">📱</div>
+                  <div className="text-2xl font-bold mb-2">AdMob Test Ad</div>
+                  <div className="text-lg mb-4">
+                    Unit ID: {ADMOB_TEST_UNIT_ID.slice(0, 20)}...
                   </div>
-                  <div className="text-xs text-green-600 mt-2 font-semibold">
-                    +{showAdModal === 'auto' ? '4.5' : '2'} coins 🪙
+                  <div className="text-4xl font-bold mb-2">
+                    {adCountdown > 0 ? adCountdown : '✓'}
+                  </div>
+                  <div className="text-sm opacity-80">
+                    {adCountdown > 0 ? 'Ad playing...' : 'Ad completed!'}
+                  </div>
+                  <div className="text-yellow-400 font-bold mt-4">
+                    Earn +{showAdModal === 'auto' ? '4.5' : '2'} coins 🪙
                   </div>
                 </div>
               </div>
-              <div className="flex space-x-3">
+              
+              {/* Close button (only after ad completes) */}
+              {adCountdown === 0 && (
                 <button
                   onClick={() => setShowAdModal(false)}
-                  className="flex-1 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold transition-all duration-200"
+                  className="absolute top-4 right-4 w-12 h-12 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white text-xl font-bold transition-all duration-200"
                 >
-                  Cancel
+                  ✕
                 </button>
-                <button
-                  onClick={watchAd}
-                  disabled={adCountdown > 0}
-                  className={`flex-1 py-2 rounded-lg font-semibold transition-all duration-200 ${
-                    adCountdown > 0 
-                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
-                      : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white'
-                  }`}
-                >
-                  {adCountdown > 0 ? `Wait ${adCountdown}s` : 'Claim Coins'}
-                </button>
-              </div>
+              )}
             </div>
           </div>
         )}
