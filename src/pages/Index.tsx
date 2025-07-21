@@ -4,7 +4,7 @@ import { Gift } from 'lucide-react';
 const BlockPuzzleGame = () => {
   const [score, setScore] = useState(0);
   const [level, setLevel] = useState(1);
-  const [grid, setGrid] = useState(() => Array(10).fill(null).map(() => Array(10).fill(0)));
+  const [grid, setGrid] = useState(() => Array(8).fill(null).map(() => Array(8).fill(0)));
   const [currentPieces, setCurrentPieces] = useState([]);
   const [draggedPiece, setDraggedPiece] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -12,6 +12,7 @@ const BlockPuzzleGame = () => {
   const [coins, setCoins] = useState(0);
   const [showAdModal, setShowAdModal] = useState<'manual' | 'auto' | false>(false);
   const [blocksCleared, setBlocksCleared] = useState(0);
+  const [blastsCount, setBласtsCount] = useState(0);
   const [comboCount, setComboCount] = useState(0);
   const [showCombo, setShowCombo] = useState(false);
   const [gameStartTime, setGameStartTime] = useState(Date.now());
@@ -25,6 +26,8 @@ const BlockPuzzleGame = () => {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [paypalEmail, setPaypalEmail] = useState('');
   const [cashAppUsername, setCashAppUsername] = useState('');
+  const [gameOverModalVisible, setGameOverModalVisible] = useState(false);
+  const [backgroundMusic, setBackgroundMusic] = useState<AudioContext | null>(null);
 
   // Beautiful modern color palette with gradients
   const colors = [
@@ -150,18 +153,18 @@ const BlockPuzzleGame = () => {
     const linesToClear = [];
     
     // Check rows
-    for (let row = 0; row < 10; row++) {
+    for (let row = 0; row < 8; row++) {
       if (newGrid[row].every(cell => cell !== 0)) {
-        for (let col = 0; col < 10; col++) {
+        for (let col = 0; col < 8; col++) {
           linesToClear.push(`${row}-${col}`);
         }
       }
     }
     
     // Check columns
-    for (let col = 0; col < 10; col++) {
+    for (let col = 0; col < 8; col++) {
       if (newGrid.every(row => row[col] !== 0)) {
-        for (let row = 0; row < 10; row++) {
+        for (let row = 0; row < 8; row++) {
           linesToClear.push(`${row}-${col}`);
         }
       }
@@ -190,11 +193,12 @@ const BlockPuzzleGame = () => {
     // Calculate cleared blocks and bonus
     const clearedBlocks = linesToClear.length;
     setBlocksCleared(prev => prev + clearedBlocks);
+    setBласtsCount(prev => prev + 1);
     
     const linesCleared = Math.min(
       new Set(linesToClear.map(pos => pos.split('-')[0])).size + // rows
       new Set(linesToClear.map(pos => pos.split('-')[1])).size   // columns
-    , 20); // Max possible lines
+    , 16); // Max possible lines for 8x8
     
     // Line clear bonus
     const lineBonus = linesCleared * 100 * level;
@@ -240,7 +244,7 @@ const BlockPuzzleGame = () => {
           const newRow = startRow + row;
           const newCol = startCol + col;
           
-          if (newRow >= 10 || newCol >= 10 || newRow < 0 || newCol < 0) {
+          if (newRow >= 8 || newCol >= 8 || newRow < 0 || newCol < 0) {
             return false;
           }
           
@@ -253,26 +257,9 @@ const BlockPuzzleGame = () => {
     return true;
   };
 
-  // Find the closest valid position for a piece (responsive blocks)
-  const findClosestValidPosition = (piece, targetRow, targetCol) => {
-    let bestPosition = null;
-    let minDistance = Infinity;
-
-    // Check all possible positions
-    for (let row = 0; row <= 10 - piece.shape.length; row++) {
-      for (let col = 0; col <= 10 - piece.shape[0].length; col++) {
-        if (canPlacePieceAt(piece, row, col)) {
-          // Calculate distance from target position
-          const distance = Math.abs(row - targetRow) + Math.abs(col - targetCol);
-          if (distance < minDistance) {
-            minDistance = distance;
-            bestPosition = { row, col };
-          }
-        }
-      }
-    }
-
-    return bestPosition;
+  // Check if piece can be placed exactly at position (no auto-snapping)
+  const canPlaceExactly = (piece, targetRow, targetCol) => {
+    return canPlacePieceAt(piece, targetRow, targetCol);
   };
 
   // Place piece on grid
@@ -308,11 +295,10 @@ const BlockPuzzleGame = () => {
     const clearedGrid = await clearLines(newGrid);
     setGrid(clearedGrid);
 
-    // Check level progression: 15-20 blocks cleared OR board cleared after 40 seconds
-    const gameTime = (Date.now() - gameStartTime) / 1000;
+    // Check level progression: board cleared OR 20 blasts made
     const totalBlocks = clearedGrid.flat().filter(cell => cell !== 0).length;
     
-    if (blocksCleared >= 15 || (totalBlocks === 0 && gameTime >= 40)) {
+    if (totalBlocks === 0 || blastsCount >= 20) {
       setShowCongratulations(true);
       setLevel(prev => prev + 1);
       setCoins(prev => {
@@ -322,7 +308,15 @@ const BlockPuzzleGame = () => {
       });
       setScore(prev => prev + (level * 1000)); // Level completion bonus
       setBlocksCleared(0);
+      setBласtsCount(0);
       setGameStartTime(Date.now());
+      
+      // Clear board for next level
+      if (totalBlocks > 0) {
+        setTimeout(() => {
+          setGrid(Array(8).fill(null).map(() => Array(8).fill(0)));
+        }, 2000);
+      }
       
       // Play level up sound
       if (playingSounds) {
@@ -354,7 +348,7 @@ const BlockPuzzleGame = () => {
     e.preventDefault();
   };
 
-  // Handle drag move with smart snapping
+  // Handle drag move - track position only
   const handleDragMove = (e) => {
     if (!isDragging || !draggedPiece) return;
     
@@ -363,31 +357,10 @@ const BlockPuzzleGame = () => {
     
     setDraggedPiecePosition({ x: clientX, y: clientY });
     
-    // Find snap position
-    const gridElement = document.querySelector('.game-grid');
-    if (gridElement) {
-      const gridRect = gridElement.getBoundingClientRect();
-      const cellSize = gridRect.width / 10;
-      const targetCol = Math.floor((clientX - gridRect.left) / cellSize);
-      const targetRow = Math.floor((clientY - gridRect.top) / cellSize);
-      
-      if (targetRow >= 0 && targetRow < 10 && targetCol >= 0 && targetCol < 10) {
-        // Find closest valid position
-        const validPosition = findClosestValidPosition(draggedPiece, targetRow, targetCol);
-        if (validPosition) {
-          setSnapPosition(validPosition);
-        } else {
-          setSnapPosition(null);
-        }
-      } else {
-        setSnapPosition(null);
-      }
-    }
-    
     e.preventDefault();
   };
 
-  // Handle drag end - snap to closest valid position
+  // Handle drag end - place exactly where dropped if valid
   const handleDragEnd = (e) => {
     if (!isDragging || !draggedPiece) return;
     
@@ -402,14 +375,13 @@ const BlockPuzzleGame = () => {
       if (clientX >= gridRect.left && clientX <= gridRect.right &&
           clientY >= gridRect.top && clientY <= gridRect.bottom) {
         
-        const cellSize = gridRect.width / 10;
+        const cellSize = gridRect.width / 8;
         const targetCol = Math.floor((clientX - gridRect.left) / cellSize);
         const targetRow = Math.floor((clientY - gridRect.top) / cellSize);
         
-        // Find and place at closest valid position
-        const validPosition = findClosestValidPosition(draggedPiece, targetRow, targetCol);
-        if (validPosition) {
-          placePieceAt(draggedPiece, validPosition.row, validPosition.col);
+        // Only place if exact position is valid - no auto-snapping
+        if (canPlaceExactly(draggedPiece, targetRow, targetCol)) {
+          placePieceAt(draggedPiece, targetRow, targetCol);
         }
       }
     }
@@ -446,8 +418,8 @@ const BlockPuzzleGame = () => {
   const canAnyPieceBePlaced = () => {
     const availablePieces = currentPieces.filter(p => !p.used);
     for (let piece of availablePieces) {
-      for (let row = 0; row <= 10 - piece.shape.length; row++) {
-        for (let col = 0; col <= 10 - (piece.shape[0]?.length || 0); col++) {
+      for (let row = 0; row <= 8 - piece.shape.length; row++) {
+        for (let col = 0; col <= 8 - (piece.shape[0]?.length || 0); col++) {
           if (canPlacePieceAt(piece, row, col)) {
             return true;
           }
@@ -469,19 +441,13 @@ const BlockPuzzleGame = () => {
       return;
     }
     
-    // Auto restart when board is full and no moves possible
-    const totalBlocks = grid.flat().filter(cell => cell !== 0).length;
-    if (totalBlocks === 100 && !canAnyPieceBePlaced()) {
+    // Show game over when no moves possible
+    if (availablePieces.length > 0 && !canAnyPieceBePlaced()) {
+      setGameOverModalVisible(true);
       // Play game over sound
       if (playingSounds) {
         playSound('gameOver');
       }
-      
-      setTimeout(() => {
-        setGrid(Array(10).fill(null).map(() => Array(10).fill(0)));
-        setCurrentPieces(generatePieces());
-        setGameStartTime(Date.now());
-      }, 1000);
     }
   }, [currentPieces, grid]);
 
@@ -508,8 +474,41 @@ const BlockPuzzleGame = () => {
     showRewardAd('manual');
   };
 
+  // Initialize background music
+  useEffect(() => {
+    if (playingSounds && !backgroundMusic) {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      setBackgroundMusic(audioContext);
+      playBackgroundMusic(audioContext);
+    } else if (!playingSounds && backgroundMusic) {
+      backgroundMusic.close();
+      setBackgroundMusic(null);
+    }
+  }, [playingSounds]);
+
+  // Background music loop
+  const playBackgroundMusic = (audioContext: AudioContext) => {
+    const playLoop = () => {
+      const melody = [523, 659, 784, 659, 523, 392, 523]; // C major scale
+      melody.forEach((freq, i) => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.setValueAtTime(freq, audioContext.currentTime + i * 0.5);
+        gain.gain.setValueAtTime(0.05, audioContext.currentTime + i * 0.5);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.5 + 0.4);
+        osc.start(audioContext.currentTime + i * 0.5);
+        osc.stop(audioContext.currentTime + i * 0.5 + 0.4);
+      });
+      
+      setTimeout(playLoop, 4000); // Loop every 4 seconds
+    };
+    playLoop();
+  };
+
   // Play game sounds
-  const playSound = (type: 'blockPlace' | 'blockbuster' | 'gameOver' | 'levelUp' | 'background') => {
+  const playSound = (type: 'blockPlace' | 'blockbuster' | 'gameOver' | 'levelUp' | 'lineClear') => {
     if (!playingSounds) return;
     
     // Web Audio API sound generation
@@ -585,6 +584,20 @@ const BlockPuzzleGame = () => {
           osc.stop(audioContext.currentTime + i * 0.2 + 0.3);
         });
         break;
+        
+      case 'lineClear':
+        // Line clear sound
+        const osc4 = audioContext.createOscillator();
+        const gain4 = audioContext.createGain();
+        osc4.connect(gain4);
+        gain4.connect(audioContext.destination);
+        osc4.frequency.setValueAtTime(1000, audioContext.currentTime);
+        osc4.frequency.exponentialRampToValueAtTime(1500, audioContext.currentTime + 0.3);
+        gain4.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gain4.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        osc4.start();
+        osc4.stop(audioContext.currentTime + 0.3);
+        break;
     }
   };
 
@@ -608,10 +621,10 @@ const BlockPuzzleGame = () => {
     // Start ad after loading simulation
     setTimeout(() => {
       console.log('📺 AdMob test ad started');
-      // Auto-close ad after duration without user interaction
+      // Auto-close ad after 3 seconds
       setTimeout(() => {
         completeAdWatch(type);
-      }, adDuration);
+      }, 3000); // Always 3 seconds, auto-close
     }, adLoadTime);
   };
 
@@ -629,18 +642,16 @@ const BlockPuzzleGame = () => {
     console.log(`🪙 AdMob reward completed: ${coinsEarned} coins earned!`);
   };
 
-  // Check if grid cell should show snap preview
-  const shouldShowSnapPreview = (row, col) => {
-    if (!snapPosition || !draggedPiece || !isDragging) return false;
-    
-    const pieceRow = row - snapPosition.row;
-    const pieceCol = col - snapPosition.col;
-    
-    if (pieceRow >= 0 && pieceRow < draggedPiece.shape.length &&
-        pieceCol >= 0 && pieceCol < draggedPiece.shape[0].length) {
-      return draggedPiece.shape[pieceRow][pieceCol] === 1;
-    }
-    return false;
+  // Game over restart function
+  const restartGame = () => {
+    setGrid(Array(8).fill(null).map(() => Array(8).fill(0)));
+    setCurrentPieces(generatePieces());
+    setGameStartTime(Date.now());
+    setScore(0);
+    setBlocksCleared(0);
+    setBласtsCount(0);
+    setLevel(1);
+    setGameOverModalVisible(false);
   };
 
   return (
@@ -748,9 +759,21 @@ const BlockPuzzleGame = () => {
           </div>
         </div>
 
-        {/* Game Grid - Fixed positioning for Android */}
+        {/* Game Grid - 8x8 Fixed Layout */}
         <div className="bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-md rounded-3xl p-6 mb-6 border border-white/20 shadow-2xl">
-          <div className="game-grid grid grid-cols-10 gap-2 bg-gradient-to-br from-black/30 to-black/10 p-4 rounded-2xl border border-white/10 shadow-inner" style={{ gridTemplateRows: 'repeat(10, 1fr)', gridTemplateColumns: 'repeat(10, 1fr)' }}>
+          <div 
+            className="game-grid bg-gradient-to-br from-black/30 to-black/10 p-4 rounded-2xl border border-white/10 shadow-inner"
+            style={{ 
+              display: 'grid', 
+              gridTemplateRows: 'repeat(8, 1fr)', 
+              gridTemplateColumns: 'repeat(8, 1fr)',
+              gap: '8px',
+              aspectRatio: '1/1',
+              width: '100%',
+              maxWidth: '400px',
+              margin: '0 auto'
+            }}
+          >
             {grid.map((row, rowIndex) =>
               row.map((cell, colIndex) => {
                 const cellKey = `${rowIndex}-${colIndex}`;
@@ -759,18 +782,15 @@ const BlockPuzzleGame = () => {
                 return (
                   <div
                     key={cellKey}
-                    className={`aspect-square rounded-xl border-2 transition-all duration-300 ${
+                    className={`rounded-xl border-2 transition-all duration-300 ${
                       cell === 0 ? 'bg-white/10 border-white/20' : 'border-white/30'
-                    } ${shouldShowSnapPreview(rowIndex, colIndex) ? 'ring-2 ring-green-400 ring-opacity-60' : ''}
-                    ${isExploding ? 'animate-ping bg-yellow-400 scale-125' : ''}`}
+                    } ${isExploding ? 'animate-ping bg-yellow-400 scale-125' : ''}`}
                     style={{
                       background: cell !== 0 
                         ? isExploding 
                           ? 'radial-gradient(circle, #FCD34D, #F59E0B)'
                           : cell 
-                        : shouldShowSnapPreview(rowIndex, colIndex) 
-                          ? 'rgba(34, 197, 94, 0.3)'
-                          : '',
+                        : '',
                       boxShadow: cell !== 0 && !isExploding 
                         ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.2)' 
                         : isExploding
@@ -779,12 +799,7 @@ const BlockPuzzleGame = () => {
                       transform: isExploding ? 'scale(1.3) rotate(45deg)' : 'scale(1)',
                       zIndex: isExploding ? 10 : 'auto',
                       position: 'relative',
-                      width: '100%',
-                      height: '100%',
-                      minWidth: '32px',
-                      minHeight: '32px',
-                      maxWidth: '40px',
-                      maxHeight: '40px'
+                      aspectRatio: '1/1'
                     }}
                   />
                 );
@@ -869,6 +884,31 @@ const BlockPuzzleGame = () => {
           </div>
         )}
 
+        {/* Game Over Modal */}
+        {gameOverModalVisible && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-md rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-white/20 transform animate-scale-in">
+              <div className="text-center">
+                <div className="text-6xl mb-4">💥</div>
+                <h3 className="text-3xl font-bold mb-4 bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
+                  Game Over!
+                </h3>
+                <div className="text-xl font-semibold text-gray-800 mb-6">
+                  No more moves possible
+                </div>
+                <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-bold text-lg mb-6">
+                  Final Score: {score.toLocaleString()}
+                </div>
+                <button
+                  onClick={restartGame}
+                  className="w-full py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl font-semibold hover:from-green-600 hover:to-blue-600 transition-all duration-200 shadow-lg"
+                >
+                  Restart Game
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Withdraw Coins Modal */}
         {showWithdrawModal && (
