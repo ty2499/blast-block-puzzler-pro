@@ -670,52 +670,52 @@ const BlockPuzzleGame = () => {
           </div>
         )}
 
-        {/* Header - Responsive Top Bar */}
-        <div className="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md rounded-3xl p-4 sm:p-6 mb-6 border border-white/20 shadow-2xl">
-          {/* Top row with stats and buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-4 text-white">
-            {/* Stats Row */}
-            <div className="flex items-center gap-4 sm:gap-6">
+        {/* Header - Single Line Layout */}
+        <div className="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md rounded-3xl p-3 sm:p-4 mb-6 border border-white/20 shadow-2xl">
+          <div className="flex items-center justify-between text-white">
+            {/* Stats Section */}
+            <div className="flex items-center gap-3 sm:gap-4">
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Score</div>
-                <div className="font-bold text-lg sm:text-xl bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+                <div className="font-bold text-sm sm:text-lg bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
                   {score.toLocaleString()}
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Coins</div>
-                <div className="font-bold text-lg sm:text-xl text-yellow-400 flex items-center gap-1">
+                <div className="font-bold text-sm sm:text-lg text-yellow-400 flex items-center gap-1">
                   🪙 {coins}
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Level</div>
-                <div className="font-bold text-2xl sm:text-3xl bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent animate-pulse">
+                <div className="font-bold text-lg sm:text-2xl bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent animate-pulse">
                   {level}
                 </div>
               </div>
             </div>
             
-            {/* Buttons Row */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            {/* Buttons Section */}
+            <div className="flex items-center gap-2">
               <button
                 onClick={handleGetCoins}
                 disabled={!isOnline}
-                className={`flex items-center space-x-2 px-4 py-2 sm:px-6 sm:py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-sm sm:text-base ${
+                className={`flex items-center space-x-1 px-3 py-2 sm:px-4 sm:py-2 rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-xs sm:text-sm ${
                   isOnline 
                     ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' 
                     : 'bg-gray-400 text-gray-200 cursor-not-allowed'
                 }`}
               >
-                <Gift className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span>{isOnline ? 'Get Coins' : 'Offline'}</span>
+                <Gift className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">{isOnline ? 'Get Coins' : 'Offline'}</span>
+                <span className="sm:hidden">{isOnline ? 'Coins' : 'Off'}</span>
               </button>
               
               <button
                 onClick={() => setPlayingSounds(!playingSounds)}
-                className="flex items-center space-x-2 px-3 py-2 sm:px-4 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-sm sm:text-base"
+                className="flex items-center px-2 py-2 sm:px-3 sm:py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-xs sm:text-sm"
               >
-                <span>{playingSounds ? '🔊' : '🔇'}</span>
+                <span className="text-sm">{playingSounds ? '🔊' : '🔇'}</span>
               </button>
             </div>
           </div>
