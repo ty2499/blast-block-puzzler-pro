@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -101,6 +102,20 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    /* Prevent scrolling on mobile during drag */
+    overscroll-behavior: none;
+    /* Smooth touch interactions */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Mobile-specific optimizations */
+  @media (max-width: 640px) {
+    body {
+      /* Prevent zoom on input focus */
+      -webkit-text-size-adjust: 100%;
+      /* Improve touch responsiveness */
+      touch-action: manipulation;
+    }
   }
 }
 
@@ -113,4 +128,56 @@ All colors MUST be HSL.
 
 .shake {
   animation: shake 0.5s ease-in-out;
+}
+
+/* Mobile touch optimization */
+@media (max-width: 640px) {
+  /* Improve touch targets */
+  .cursor-pointer {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Prevent text selection during drag */
+  .select-none {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Game grid specific mobile optimizations */
+.game-grid {
+  /* Prevent scrolling during touch interactions */
+  touch-action: none;
+  /* Ensure crisp rendering on mobile */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Piece container optimizations */
+.pieces-container {
+  /* Prevent accidental scroll during piece interaction */
+  touch-action: pan-y;
+}
+
+/* Smooth animations optimized for mobile */
+@media (prefers-reduced-motion: no-preference) {
+  .transition-all {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+}
+
+/* High DPI display optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .game-grid, .pieces-container {
+    /* Ensure sharp rendering on retina displays */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }

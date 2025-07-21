@@ -28,9 +28,28 @@ const BlockPuzzleGame = () => {
   const [cashAppUsername, setCashAppUsername] = useState('');
   const [gameOverModalVisible, setGameOverModalVisible] = useState(false);
   const [backgroundMusic, setBackgroundMusic] = useState<AudioContext | null>(null);
+  const [cellSize, setCellSize] = useState(0);
 
   // Orange color for all blocks
-  const blockColor = '#FF6B35'; // Orange color
+  const blockColor = '#FF6B35';
+
+  // Calculate responsive cell size
+  useEffect(() => {
+    const calculateCellSize = () => {
+      const screenWidth = window.innerWidth;
+      const padding = 48; // Total padding (24px each side)
+      const gap = 4 * 7; // 4px gap between 8 cells = 28px total
+      const availableWidth = Math.min(screenWidth - padding, 400); // Max 400px
+      const calculatedSize = Math.floor((availableWidth - gap) / 8);
+      const minSize = 28; // Minimum cell size for mobile
+      const maxSize = 45; // Maximum cell size
+      setCellSize(Math.max(minSize, Math.min(maxSize, calculatedSize)));
+    };
+
+    calculateCellSize();
+    window.addEventListener('resize', calculateCellSize);
+    return () => window.removeEventListener('resize', calculateCellSize);
+  }, []);
 
   // Generate proper piece shapes with correct sizes
   const generatePieceShapes = () => {
@@ -249,11 +268,6 @@ const BlockPuzzleGame = () => {
     return true;
   };
 
-  // Check if piece can be placed exactly at position (no auto-snapping)
-  const canPlaceExactly = (piece, targetRow, targetCol) => {
-    return canPlacePieceAt(piece, targetRow, targetCol);
-  };
-
   // Place piece on grid
   const placePieceAt = async (piece, startRow, startCol) => {
     const newGrid = [...grid];
@@ -317,63 +331,73 @@ const BlockPuzzleGame = () => {
     }
   };
 
-  // Enhanced drag and drop
+  // Enhanced drag and drop for mobile
   const [draggedPiecePosition, setDraggedPiecePosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [snapPosition, setSnapPosition] = useState(null);
 
-  // Handle piece drag start
+  // Handle piece drag start - optimized for mobile
   const handlePieceStart = (e, piece) => {
     if (piece.used) return;
     
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    // Prevent default to avoid scrolling on mobile
+    e.preventDefault();
+    
+    const touch = e.touches ? e.touches[0] : e;
     const rect = e.currentTarget.getBoundingClientRect();
     
     setDraggedPiece(piece);
     setIsDragging(true);
     setDragOffset({
-      x: clientX - rect.left,
-      y: clientY - rect.top
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top
     });
-    setDraggedPiecePosition({ x: clientX, y: clientY });
-    e.preventDefault();
+    setDraggedPiecePosition({ x: touch.clientX, y: touch.clientY });
   };
 
-  // Handle drag move - track position only
+  // Handle drag move - optimized for mobile
   const handleDragMove = (e) => {
     if (!isDragging || !draggedPiece) return;
     
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    e.preventDefault(); // Prevent scrolling
     
-    setDraggedPiecePosition({ x: clientX, y: clientY });
-    
-    e.preventDefault();
+    const touch = e.touches ? e.touches[0] : e;
+    setDraggedPiecePosition({ x: touch.clientX, y: touch.clientY });
   };
 
-  // Handle drag end - place wherever player wants
+  // Handle drag end - improved placement detection for mobile
   const handleDragEnd = (e) => {
     if (!isDragging || !draggedPiece) return;
     
-    const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-    const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+    e.preventDefault();
     
-    // Check if over grid
+    const touch = e.changedTouches ? e.changedTouches[0] : e;
+    
+    // Get grid element with more specific selector
     const gridElement = document.querySelector('.game-grid');
     if (gridElement) {
       const gridRect = gridElement.getBoundingClientRect();
       
-      if (clientX >= gridRect.left && clientX <= gridRect.right &&
-          clientY >= gridRect.top && clientY <= gridRect.bottom) {
+      // More generous bounds checking for mobile
+      const touchBuffer = 10; // 10px buffer for easier placement
+      if (touch.clientX >= gridRect.left - touchBuffer && 
+          touch.clientX <= gridRect.right + touchBuffer &&
+          touch.clientY >= gridRect.top - touchBuffer && 
+          touch.clientY <= gridRect.bottom + touchBuffer) {
         
-        const cellSize = gridRect.width / 8;
-        const targetCol = Math.floor((clientX - gridRect.left) / cellSize);
-        const targetRow = Math.floor((clientY - gridRect.top) / cellSize);
+        // Calculate target position based on cell size
+        const relativeX = touch.clientX - gridRect.left;
+        const relativeY = touch.clientY - gridRect.top;
+        const targetCol = Math.floor(relativeX / (cellSize + 4)); // Include gap
+        const targetRow = Math.floor(relativeY / (cellSize + 4)); // Include gap
         
-        // Place freely wherever player wants
-        if (canPlacePieceAt(draggedPiece, targetRow, targetCol)) {
-          placePieceAt(draggedPiece, targetRow, targetCol);
+        // Ensure within bounds
+        const clampedCol = Math.max(0, Math.min(7, targetCol));
+        const clampedRow = Math.max(0, Math.min(7, targetRow));
+        
+        console.log(`Trying to place at row: ${clampedRow}, col: ${clampedCol}`);
+        
+        if (canPlacePieceAt(draggedPiece, clampedRow, clampedCol)) {
+          placePieceAt(draggedPiece, clampedRow, clampedCol);
         }
       }
     }
@@ -381,10 +405,9 @@ const BlockPuzzleGame = () => {
     setDraggedPiece(null);
     setIsDragging(false);
     setDraggedPiecePosition({ x: 0, y: 0 });
-    setSnapPosition(null);
   };
 
-  // Add event listeners for drag
+  // Add event listeners for drag - mobile optimized
   useEffect(() => {
     const handleMouseMove = (e) => handleDragMove(e);
     const handleMouseUp = (e) => handleDragEnd(e);
@@ -395,7 +418,7 @@ const BlockPuzzleGame = () => {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
       document.addEventListener('touchmove', handleTouchMove, { passive: false });
-      document.addEventListener('touchend', handleTouchEnd);
+      document.addEventListener('touchend', handleTouchEnd, { passive: false });
     }
 
     return () => {
@@ -404,7 +427,7 @@ const BlockPuzzleGame = () => {
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [isDragging, draggedPiece]);
+  }, [isDragging, draggedPiece, cellSize]);
 
   // Check if any piece can be placed
   const canAnyPieceBePlaced = () => {
@@ -647,7 +670,7 @@ const BlockPuzzleGame = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-3 sm:p-4 relative overflow-hidden">
       {/* Background effects */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-600/20 via-transparent to-transparent"></div>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-600/20 via-transparent to-transparent"></div>
@@ -656,7 +679,7 @@ const BlockPuzzleGame = () => {
         {/* Combo Animation */}
         {showCombo && (
           <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-8 py-4 rounded-2xl shadow-2xl transform animate-bounce">
+            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-8 py-4 rounded-2xl transform animate-bounce">
               <div className="text-center">
                 <div className="text-3xl font-bold">🔥 COMBO x{comboCount} 🔥</div>
               </div>
@@ -690,51 +713,50 @@ const BlockPuzzleGame = () => {
           </div>
         )}
 
-        {/* Header - Single Line Layout */}
-        <div className="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md rounded-3xl p-3 sm:p-4 mb-6 border border-white/20 shadow-2xl">
+        {/* Header - Mobile Optimized */}
+        <div className="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md rounded-2xl p-3 mb-4 border border-white/20">
           <div className="flex items-center justify-between text-white">
             {/* Stats Section */}
-            <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Score</div>
-                <div className="font-bold text-sm sm:text-lg bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+                <div className="font-bold text-sm bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
                   {score.toLocaleString()}
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Coins</div>
-                <div className="font-bold text-sm sm:text-lg text-yellow-400 flex items-center gap-1 cursor-pointer" onClick={() => setShowWithdrawModal(true)}>
+                <div className="font-bold text-sm text-yellow-400 flex items-center gap-1 cursor-pointer" onClick={() => setShowWithdrawModal(true)}>
                   🪙 {coins}
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Level</div>
-                <div className="font-bold text-lg sm:text-2xl bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent animate-pulse">
+                <div className="font-bold text-lg bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent animate-pulse">
                   {level}
                 </div>
               </div>
             </div>
             
             {/* Buttons Section */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <button
                 onClick={handleGetCoins}
                 disabled={!isOnline}
-                className={`flex items-center space-x-1 px-3 py-2 sm:px-4 sm:py-2 rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-xs sm:text-sm ${
+                className={`flex items-center space-x-1 px-2 py-1 sm:px-3 sm:py-2 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 text-xs ${
                   isOnline 
                     ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' 
                     : 'bg-gray-400 text-gray-200 cursor-not-allowed'
                 }`}
               >
-                <Gift className="w-3 h-3 sm:w-4 sm:h-4" />
+                <Gift className="w-3 h-3" />
                 <span className="hidden sm:inline">{isOnline ? 'Get Coins' : 'Offline'}</span>
-                <span className="sm:hidden">{isOnline ? 'Coins' : 'Off'}</span>
               </button>
               
               {coins >= 15000 && (
                 <button
                   onClick={() => setShowWithdrawModal(true)}
-                  className="flex items-center space-x-1 px-3 py-2 sm:px-4 sm:py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-xs sm:text-sm"
+                  className="flex items-center space-x-1 px-2 py-1 sm:px-3 sm:py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 text-xs"
                 >
                   💰
                   <span className="hidden sm:inline">Withdraw</span>
@@ -743,7 +765,7 @@ const BlockPuzzleGame = () => {
               
               <button
                 onClick={() => setPlayingSounds(!playingSounds)}
-                className="flex items-center px-2 py-2 sm:px-3 sm:py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-xs sm:text-sm"
+                className="flex items-center px-2 py-1 sm:px-3 sm:py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 text-xs"
               >
                 <span className="text-sm">{playingSounds ? '🔊' : '🔇'}</span>
               </button>
@@ -751,19 +773,17 @@ const BlockPuzzleGame = () => {
           </div>
         </div>
 
-        {/* Game Grid - 8x8 Fixed Layout */}
-        <div className="bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-md rounded-3xl p-6 mb-6 border border-white/20 shadow-2xl">
+        {/* Game Grid - Mobile Responsive */}
+        <div className="bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-md rounded-2xl p-4 mb-4 border border-white/20">
           <div 
-            className="game-grid bg-gradient-to-br from-black/30 to-black/10 p-4 rounded-2xl border border-white/10 shadow-inner"
+            className="game-grid bg-gradient-to-br from-black/30 to-black/10 p-2 rounded-2xl border border-white/10 mx-auto"
             style={{ 
               display: 'grid', 
               gridTemplateRows: 'repeat(8, 1fr)', 
               gridTemplateColumns: 'repeat(8, 1fr)',
-              gap: '8px',
-              aspectRatio: '1/1',
-              width: '100%',
-              maxWidth: '400px',
-              margin: '0 auto'
+              gap: '4px',
+              width: `${cellSize * 8 + 4 * 7}px`,
+              height: `${cellSize * 8 + 4 * 7}px`
             }}
           >
             {grid.map((row, rowIndex) =>
@@ -774,10 +794,12 @@ const BlockPuzzleGame = () => {
                 return (
                   <div
                     key={cellKey}
-                    className={`rounded-xl border-2 transition-all duration-300 ${
+                    className={`rounded-lg border-2 transition-all duration-300 ${
                       cell === 0 ? 'bg-white/10 border-white/20' : 'border-white/30'
                     } ${isExploding ? 'animate-ping bg-yellow-400 scale-125' : ''}`}
                     style={{
+                      width: `${cellSize}px`,
+                      height: `${cellSize}px`,
                       background: cell !== 0 
                         ? isExploding 
                           ? 'radial-gradient(circle, #FCD34D, #F59E0B)'
@@ -785,8 +807,7 @@ const BlockPuzzleGame = () => {
                         : '',
                       transform: isExploding ? 'scale(1.3) rotate(45deg)' : 'scale(1)',
                       zIndex: isExploding ? 10 : 'auto',
-                      position: 'relative',
-                      aspectRatio: '1/1'
+                      position: 'relative'
                     }}
                   />
                 );
@@ -795,13 +816,13 @@ const BlockPuzzleGame = () => {
           </div>
         </div>
 
-        {/* Current Pieces */}
-        <div className="pieces-container bg-gradient-to-r from-white/15 to-white/5 backdrop-blur-md rounded-2xl p-6 mb-6 border border-white/10 shadow-xl">
+        {/* Current Pieces - Mobile Optimized */}
+        <div className="pieces-container bg-gradient-to-r from-white/15 to-white/5 backdrop-blur-md rounded-2xl p-4 mb-4 border border-white/10">
           <div className="flex justify-around items-center">
             {currentPieces.map((piece) => (
               <div
                 key={piece.id}
-                className={`cursor-pointer transition-all duration-300 select-none p-3 rounded-xl ${
+                className={`cursor-pointer transition-all duration-300 select-none p-2 rounded-xl ${
                   piece.used 
                     ? 'opacity-30 scale-75' 
                     : 'hover:scale-110 active:scale-95 hover:bg-white/10'
@@ -820,8 +841,10 @@ const BlockPuzzleGame = () => {
                       {row.map((cell, colIndex) => (
                         <div
                           key={colIndex}
-                          className={`w-8 h-8 rounded-lg transition-all duration-200`}
+                          className="rounded-lg transition-all duration-200"
                           style={{
+                            width: `${cellSize}px`,
+                            height: `${cellSize}px`,
                             background: cell === 1 ? blockColor : 'transparent',
                             border: cell === 1 ? '1px solid rgba(255,255,255,0.3)' : 'none'
                           }}
@@ -835,15 +858,15 @@ const BlockPuzzleGame = () => {
           </div>
         </div>
 
-        {/* Dragged Piece Overlay */}
+        {/* Dragged Piece Overlay - Mobile Optimized */}
         {isDragging && draggedPiece && (
           <div
             className="fixed pointer-events-none z-50 opacity-95"
             style={{
               left: draggedPiecePosition.x - dragOffset.x,
               top: draggedPiecePosition.y - dragOffset.y,
-              transform: 'scale(1.3) rotate(5deg)',
-              filter: 'drop-shadow(0 12px 24px rgba(0,0,0,0.5))'
+              transform: 'scale(1.2)',
+              filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.5))'
             }}
           >
             <div className="grid gap-1">
@@ -852,8 +875,10 @@ const BlockPuzzleGame = () => {
                   {row.map((cell, colIndex) => (
                     <div
                       key={colIndex}
-                      className={`w-8 h-8 rounded-lg`}
+                      className="rounded-lg"
                       style={{
+                        width: `${cellSize}px`,
+                        height: `${cellSize}px`,
                         background: cell === 1 ? blockColor : 'transparent',
                         border: cell === 1 ? '2px solid rgba(255,255,255,0.5)' : 'none'
                       }}
