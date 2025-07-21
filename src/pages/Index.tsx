@@ -153,7 +153,7 @@ const BlockPuzzleGame = () => {
   const initAudioContext = useCallback(() => {
     if (!audioContextRef.current && playingSounds) {
       try {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         
         // Resume context for mobile browsers
         if (audioContextRef.current.state === 'suspended') {
@@ -1111,7 +1111,7 @@ const BlockPuzzleGame = () => {
                   
                   {adCountdown <= 0 && (
                     <div className="mt-4 text-green-400 font-semibold text-sm sm:text-base animate-bounce">
-                      +{showAdModal === 'auto' ? '4.5' : '2'} coins earned! 🪙
+                      +{showAdModal ? '4.5' : '2'} coins earned! 🪙
                     </div>
                   )}
                   
