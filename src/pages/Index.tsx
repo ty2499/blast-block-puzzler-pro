@@ -20,9 +20,8 @@ const BlockPuzzleGame = () => {
   const [explodingCells, setExplodingCells] = useState(new Set());
   const [isClearing, setIsClearing] = useState(false);
   const [adCountdown, setAdCountdown] = useState(3);
-  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [paypalEmail, setPaypalEmail] = useState('');
-  const [cashAppUsername, setCashAppUsername] = useState('');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [playingSounds, setPlayingSounds] = useState(true);
 
   // Beautiful modern color palette with gradients
   const colors = [
@@ -95,6 +94,17 @@ const BlockPuzzleGame = () => {
     if (saved) setCoins(parseInt(saved));
     setGameStartTime(Date.now());
     setLastAdTime(Date.now());
+    
+    // Online/offline detection
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // Auto ads every 3 minutes of gameplay
@@ -166,8 +176,10 @@ const BlockPuzzleGame = () => {
     setIsClearing(true);
     setExplodingCells(new Set(linesToClear));
     
-    // Sound effect simulation (visual feedback)
-    console.log('💥 BLAST! Lines cleared!');
+    // Play line clear sound
+    if (playingSounds) {
+      playSound('lineClear');
+    }
     
     // Wait for blast animation
     await new Promise(resolve => setTimeout(resolve, 600));
@@ -274,8 +286,10 @@ const BlockPuzzleGame = () => {
       }
     }
     
-    // Sound effect simulation
-    console.log('🔊 Block placed sound');
+    // Play place block sound
+    if (playingSounds) {
+      playSound('blockPlace');
+    }
     
     // Mark piece as used
     setCurrentPieces(prev => 
@@ -306,6 +320,11 @@ const BlockPuzzleGame = () => {
       setScore(prev => prev + (level * 1000)); // Level completion bonus
       setBlocksCleared(0);
       setGameStartTime(Date.now());
+      
+      // Play level up sound
+      if (playingSounds) {
+        playSound('levelUp');
+      }
     }
   };
 
@@ -450,6 +469,11 @@ const BlockPuzzleGame = () => {
     // Auto restart when board is full and no moves possible
     const totalBlocks = grid.flat().filter(cell => cell !== 0).length;
     if (totalBlocks === 100 && !canAnyPieceBePlaced()) {
+      // Play game over sound
+      if (playingSounds) {
+        playSound('gameOver');
+      }
+      
       setTimeout(() => {
         setGrid(Array(10).fill(null).map(() => Array(10).fill(0)));
         setCurrentPieces(generatePieces());
@@ -481,9 +505,81 @@ const BlockPuzzleGame = () => {
     showRewardAd('manual');
   };
 
-  // Show real AdMob reward ad
+  // Play game sounds
+  const playSound = (type: 'blockPlace' | 'lineClear' | 'gameOver' | 'levelUp' | 'background') => {
+    if (!playingSounds) return;
+    
+    // Web Audio API sound generation
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    switch (type) {
+      case 'blockPlace':
+        // Short click sound
+        const oscillator1 = audioContext.createOscillator();
+        const gainNode1 = audioContext.createGain();
+        oscillator1.connect(gainNode1);
+        gainNode1.connect(audioContext.destination);
+        oscillator1.frequency.setValueAtTime(800, audioContext.currentTime);
+        gainNode1.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        oscillator1.start();
+        oscillator1.stop(audioContext.currentTime + 0.1);
+        break;
+        
+      case 'lineClear':
+        // Success sound
+        const oscillator2 = audioContext.createOscillator();
+        const gainNode2 = audioContext.createGain();
+        oscillator2.connect(gainNode2);
+        gainNode2.connect(audioContext.destination);
+        oscillator2.frequency.setValueAtTime(400, audioContext.currentTime);
+        oscillator2.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.3);
+        gainNode2.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        oscillator2.start();
+        oscillator2.stop(audioContext.currentTime + 0.3);
+        break;
+        
+      case 'gameOver':
+        // Fail sound
+        const oscillator3 = audioContext.createOscillator();
+        const gainNode3 = audioContext.createGain();
+        oscillator3.connect(gainNode3);
+        gainNode3.connect(audioContext.destination);
+        oscillator3.frequency.setValueAtTime(200, audioContext.currentTime);
+        oscillator3.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.5);
+        gainNode3.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode3.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        oscillator3.start();
+        oscillator3.stop(audioContext.currentTime + 0.5);
+        break;
+        
+      case 'levelUp':
+        // Level up fanfare
+        [523, 659, 784, 1047].forEach((freq, i) => {
+          const osc = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          osc.connect(gain);
+          gain.connect(audioContext.destination);
+          osc.frequency.setValueAtTime(freq, audioContext.currentTime + i * 0.2);
+          gain.gain.setValueAtTime(0.1, audioContext.currentTime + i * 0.2);
+          gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.2 + 0.3);
+          osc.start(audioContext.currentTime + i * 0.2);
+          osc.stop(audioContext.currentTime + i * 0.2 + 0.3);
+        });
+        break;
+    }
+  };
+
+  // Show real AdMob reward ad with offline handling
   const showRewardAd = (type: 'manual' | 'auto') => {
     console.log(`🎬 Loading AdMob test ad: ${ADMOB_TEST_UNIT_ID}`);
+    
+    if (!isOnline) {
+      // Offline mode - no ad, no reward
+      alert('No internet connection. Ads require an active internet connection.');
+      return;
+    }
     
     // Simulate real AdMob ad loading and completion
     const adLoadTime = Math.random() * 2000 + 1000; // 1-3 seconds loading
@@ -588,7 +684,7 @@ const BlockPuzzleGame = () => {
               </div>
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Coins</div>
-                <div className="font-bold text-lg sm:text-xl text-yellow-400 flex items-center gap-1 cursor-pointer" onClick={() => setShowWithdrawModal(true)}>
+                <div className="font-bold text-lg sm:text-xl text-yellow-400 flex items-center gap-1">
                   🪙 {coins}
                 </div>
               </div>
@@ -604,21 +700,23 @@ const BlockPuzzleGame = () => {
             <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={handleGetCoins}
-                className="flex items-center space-x-2 px-4 py-2 sm:px-6 sm:py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-sm sm:text-base"
+                disabled={!isOnline}
+                className={`flex items-center space-x-2 px-4 py-2 sm:px-6 sm:py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-sm sm:text-base ${
+                  isOnline 
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' 
+                    : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                }`}
               >
                 <Gift className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span>Get Coins</span>
+                <span>{isOnline ? 'Get Coins' : 'Offline'}</span>
               </button>
               
-              {coins >= 15000 && (
-                <button
-                  onClick={() => setShowWithdrawModal(true)}
-                  className="flex items-center space-x-2 px-4 py-2 sm:px-6 sm:py-3 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-sm sm:text-base"
-                >
-                  💰
-                  <span>Withdraw</span>
-                </button>
-              )}
+              <button
+                onClick={() => setPlayingSounds(!playingSounds)}
+                className="flex items-center space-x-2 px-3 py-2 sm:px-4 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-sm sm:text-base"
+              >
+                <span>{playingSounds ? '🔊' : '🔇'}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -737,139 +835,37 @@ const BlockPuzzleGame = () => {
           </div>
         )}
 
-        {/* Withdraw Coins Modal */}
-        {showWithdrawModal && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gradient-to-br from-white/95 to-white/85 backdrop-blur-md rounded-3xl p-8 max-w-md w-full shadow-2xl border border-white/30 transform animate-scale-in">
-              <div className="text-center">
-                <div className="text-6xl mb-4">💰</div>
-                <h3 className="text-3xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  Withdraw Coins
-                </h3>
-                <div className="text-lg text-gray-700 mb-6">
-                  Turn your coins into real money!
-                </div>
-                <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-lg mb-6">
-                  100 coins = $1 USD
-                </div>
-                <div className="text-xl font-semibold text-gray-800 mb-6">
-                  Your balance: {coins} coins = ${(coins / 100).toFixed(2)} USD
-                </div>
-                
-                {coins >= 15000 ? (
-                  <div className="space-y-4">
-                    <div className="text-green-600 font-semibold mb-4">
-                      ✅ Minimum withdrawal amount reached! ($150)
-                    </div>
-                    
-                    {/* PayPal Section */}
-                    <div className="border border-gray-200 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons@v9/icons/paypal.svg" 
-                             alt="PayPal" className="w-6 h-6" style={{filter: 'invert(27%) sepia(98%) saturate(1455%) hue-rotate(204deg) brightness(96%) contrast(98%)'}} />
-                        <span className="font-semibold text-gray-800">PayPal</span>
-                      </div>
-                      <input
-                        type="email"
-                        placeholder="Enter your PayPal email"
-                        value={paypalEmail}
-                        onChange={(e) => setPaypalEmail(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    
-                    {/* Cash App Section */}
-                    <div className="border border-gray-200 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons@v9/icons/cashapp.svg" 
-                             alt="Cash App" className="w-6 h-6" style={{filter: 'invert(47%) sepia(96%) saturate(4466%) hue-rotate(88deg) brightness(103%) contrast(103%)'}} />
-                        <span className="font-semibold text-gray-800">Cash App</span>
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Enter your Cash App username"
-                        value={cashAppUsername}
-                        onChange={(e) => setCashAppUsername(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      />
-                    </div>
-                    
-                    <div className="flex gap-3 mt-6">
-                      <button
-                        onClick={() => setShowWithdrawModal(false)}
-                        className="flex-1 py-3 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-xl font-semibold transition-all duration-200"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (paypalEmail || cashAppUsername) {
-                            alert(`Withdrawal request submitted! We'll process your payment of $${(coins / 100).toFixed(2)} within 3-5 business days.`);
-                            setShowWithdrawModal(false);
-                          } else {
-                            alert('Please enter either PayPal email or Cash App username');
-                          }
-                        }}
-                        className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-xl font-semibold transition-all duration-200"
-                      >
-                        Withdraw
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <div className="text-red-600 font-semibold mb-4">
-                      ❌ Minimum withdrawal: $150 USD (15,000 coins)
-                    </div>
-                    <div className="text-gray-600 mb-6">
-                      You need {15000 - coins} more coins to withdraw
-                    </div>
-                    <button
-                      onClick={() => setShowWithdrawModal(false)}
-                      className="w-full py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-xl font-semibold hover:from-purple-600 hover:to-blue-600 transition-all duration-200"
-                    >
-                      Keep Playing
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* AdMob Test Ad Player */}
+        {/* AdMob Test Ad Player - Android Responsive */}
         {showAdModal && (
           <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
             <div className="w-full h-full relative">
-              {/* AdMob ad container */}
-              <div className="w-full h-full bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center">
-                <div className="text-center text-white">
-                  <div className="text-6xl mb-4 animate-bounce">📱</div>
-                  <div className="text-2xl font-bold mb-2">AdMob Test Ad</div>
-                  <div className="text-lg mb-4">
-                    Unit ID: {ADMOB_TEST_UNIT_ID.slice(0, 20)}...
+              {/* AdMob ad container - Mobile optimized */}
+              <div className="w-full h-full bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center p-4">
+                <div className="text-center text-white max-w-sm">
+                  <div className="text-4xl sm:text-6xl mb-4 animate-bounce">📱</div>
+                  <div className="text-xl sm:text-2xl font-bold mb-2">AdMob Test Ad</div>
+                  <div className="text-sm sm:text-lg mb-4 break-all">
+                    Unit ID: {ADMOB_TEST_UNIT_ID.slice(0, 15)}...
                   </div>
-                  <div className="text-4xl font-bold mb-2">
+                  <div className="text-3xl sm:text-4xl font-bold mb-2">
                     {adCountdown > 0 ? adCountdown : '✓'}
                   </div>
-                  <div className="text-sm opacity-80">
-                    {adCountdown > 0 ? 'Ad playing...' : 'Ad completed!'}
+                  <div className="text-xs sm:text-sm opacity-80">
+                    {adCountdown > 0 ? 'Ad will end in' : 'Ad completed!'} {showAdModal === 'auto' ? '(Auto)' : '(Manual)'}
                   </div>
-                  <div className="text-yellow-400 font-bold mt-4">
-                    Earn +{showAdModal === 'auto' ? '4.5' : '2'} coins 🪙
-                  </div>
+                  {adCountdown === 0 && (
+                    <div className="mt-4 text-green-400 font-semibold text-sm sm:text-base">
+                      +{showAdModal === 'auto' ? '4.5' : '2'} coins earned! 🪙
+                    </div>
+                  )}
+                  {!isOnline && (
+                    <div className="mt-4 text-red-400 font-semibold text-sm">
+                      ⚠️ Offline Mode - No reward available
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              {/* Close button (only after ad completes) */}
-              {adCountdown === 0 && (
-                <button
-                  onClick={() => setShowAdModal(false)}
-                  className="absolute top-4 right-4 w-12 h-12 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white text-xl font-bold transition-all duration-200"
-                >
-                  ✕
-                </button>
-              )}
             </div>
           </div>
         )}
