@@ -30,6 +30,12 @@ const BlockPuzzleGame = () => {
   const [backgroundMusic, setBackgroundMusic] = useState<AudioContext | null>(null);
   const [cellSize, setCellSize] = useState(0);
 
+  // Enhanced drag and drop states
+  const [draggedPiecePosition, setDraggedPiecePosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [previewPosition, setPreviewPosition] = useState(null);
+  const [invalidPlacement, setInvalidPlacement] = useState(false);
+
   // Orange color for all blocks
   const blockColor = '#FF6B35';
 
@@ -331,11 +337,32 @@ const BlockPuzzleGame = () => {
     }
   };
 
-  // Enhanced drag and drop for mobile
-  const [draggedPiecePosition, setDraggedPiecePosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
+  // Get grid position from mouse/touch coordinates
+  const getGridPositionFromCoordinates = (clientX, clientY) => {
+    const gridElement = document.querySelector('.game-grid');
+    if (!gridElement) return null;
+    
+    const gridRect = gridElement.getBoundingClientRect();
+    
+    // Check if coordinates are within grid bounds with tolerance
+    const tolerance = 20;
+    if (clientX < gridRect.left - tolerance || clientX > gridRect.right + tolerance ||
+        clientY < gridRect.top - tolerance || clientY > gridRect.bottom + tolerance) {
+      return null;
+    }
+    
+    const cellSize = gridRect.width / 8;
+    const col = Math.floor((clientX - gridRect.left) / cellSize);
+    const row = Math.floor((clientY - gridRect.top) / cellSize);
+    
+    // Clamp to grid bounds
+    const clampedRow = Math.max(0, Math.min(7, row));
+    const clampedCol = Math.max(0, Math.min(7, col));
+    
+    return { row: clampedRow, col: clampedCol };
+  };
 
-  // Handle piece drag start - optimized for mobile
+  // Enhanced drag and drop for mobile
   const handlePieceStart = (e, piece) => {
     if (piece.used) return;
     
@@ -352,9 +379,11 @@ const BlockPuzzleGame = () => {
       y: touch.clientY - rect.top
     });
     setDraggedPiecePosition({ x: touch.clientX, y: touch.clientY });
+    setPreviewPosition(null);
+    setInvalidPlacement(false);
   };
 
-  // Handle drag move - optimized for mobile
+  // Handle drag move with preview
   const handleDragMove = (e) => {
     if (!isDragging || !draggedPiece) return;
     
@@ -362,49 +391,58 @@ const BlockPuzzleGame = () => {
     
     const touch = e.touches ? e.touches[0] : e;
     setDraggedPiecePosition({ x: touch.clientX, y: touch.clientY });
+    
+    // Get grid position for preview
+    const gridPos = getGridPositionFromCoordinates(touch.clientX, touch.clientY);
+    if (gridPos) {
+      const { row, col } = gridPos;
+      
+      // Check if piece can be placed at this position
+      const canPlace = canPlacePieceAt(draggedPiece, row, col);
+      
+      setPreviewPosition({
+        row,
+        col,
+        valid: canPlace
+      });
+    } else {
+      setPreviewPosition(null);
+    }
   };
 
-  // Handle drag end - improved placement detection for mobile
+  // Handle drag end with enhanced placement detection
   const handleDragEnd = (e) => {
     if (!isDragging || !draggedPiece) return;
     
     e.preventDefault();
     
     const touch = e.changedTouches ? e.changedTouches[0] : e;
+    const gridPos = getGridPositionFromCoordinates(touch.clientX, touch.clientY);
     
-    // Get grid element with more specific selector
-    const gridElement = document.querySelector('.game-grid');
-    if (gridElement) {
-      const gridRect = gridElement.getBoundingClientRect();
+    if (gridPos) {
+      const { row, col } = gridPos;
       
-      // More generous bounds checking for mobile
-      const touchBuffer = 10; // 10px buffer for easier placement
-      if (touch.clientX >= gridRect.left - touchBuffer && 
-          touch.clientX <= gridRect.right + touchBuffer &&
-          touch.clientY >= gridRect.top - touchBuffer && 
-          touch.clientY <= gridRect.bottom + touchBuffer) {
-        
-        // Calculate target position based on cell size
-        const relativeX = touch.clientX - gridRect.left;
-        const relativeY = touch.clientY - gridRect.top;
-        const targetCol = Math.floor(relativeX / (cellSize + 4)); // Include gap
-        const targetRow = Math.floor(relativeY / (cellSize + 4)); // Include gap
-        
-        // Ensure within bounds
-        const clampedCol = Math.max(0, Math.min(7, targetCol));
-        const clampedRow = Math.max(0, Math.min(7, targetRow));
-        
-        console.log(`Trying to place at row: ${clampedRow}, col: ${clampedCol}`);
-        
-        if (canPlacePieceAt(draggedPiece, clampedRow, clampedCol)) {
-          placePieceAt(draggedPiece, clampedRow, clampedCol);
+      if (canPlacePieceAt(draggedPiece, row, col)) {
+        // Valid placement
+        placePieceAt(draggedPiece, row, col);
+      } else {
+        // Invalid placement - show error feedback
+        setInvalidPlacement(true);
+        if (playingSounds) {
+          playSound('invalidPlacement');
         }
+        
+        // Reset invalid placement after animation
+        setTimeout(() => {
+          setInvalidPlacement(false);
+        }, 500);
       }
     }
     
     setDraggedPiece(null);
     setIsDragging(false);
     setDraggedPiecePosition({ x: 0, y: 0 });
+    setPreviewPosition(null);
   };
 
   // Add event listeners for drag - mobile optimized
@@ -489,12 +527,26 @@ const BlockPuzzleGame = () => {
     showRewardAd('manual');
   };
 
-  // Initialize background music
+  // Initialize background music with mobile optimization
   useEffect(() => {
     if (playingSounds && !backgroundMusic) {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      setBackgroundMusic(audioContext);
-      playBackgroundMusic(audioContext);
+      const initAudio = async () => {
+        try {
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          
+          // Resume audio context for mobile
+          if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+          }
+          
+          setBackgroundMusic(audioContext);
+          playBackgroundMusic(audioContext);
+        } catch (error) {
+          console.warn('Audio initialization failed:', error);
+        }
+      };
+      
+      initAudio();
     } else if (!playingSounds && backgroundMusic) {
       backgroundMusic.close();
       setBackgroundMusic(null);
@@ -504,6 +556,8 @@ const BlockPuzzleGame = () => {
   // Background music loop
   const playBackgroundMusic = (audioContext: AudioContext) => {
     const playLoop = () => {
+      if (!playingSounds || !audioContext) return;
+      
       const melody = [523, 659, 784, 659, 523, 392, 523]; // C major scale
       melody.forEach((freq, i) => {
         const osc = audioContext.createOscillator();
@@ -522,97 +576,128 @@ const BlockPuzzleGame = () => {
     playLoop();
   };
 
-  // Play game sounds
-  const playSound = (type: 'blockPlace' | 'blockbuster' | 'gameOver' | 'levelUp' | 'lineClear') => {
+  // Enhanced play game sounds with mobile optimization
+  const playSound = (type: 'blockPlace' | 'blockbuster' | 'gameOver' | 'levelUp' | 'lineClear' | 'invalidPlacement') => {
     if (!playingSounds) return;
     
-    // Web Audio API sound generation
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
-    switch (type) {
-      case 'blockPlace':
-        // Short click sound
-        const oscillator1 = audioContext.createOscillator();
-        const gainNode1 = audioContext.createGain();
-        oscillator1.connect(gainNode1);
-        gainNode1.connect(audioContext.destination);
-        oscillator1.frequency.setValueAtTime(800, audioContext.currentTime);
-        gainNode1.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-        oscillator1.start();
-        oscillator1.stop(audioContext.currentTime + 0.1);
-        break;
-        
-      case 'blockbuster':
-        // Epic blockbuster explosion sound
-        const frequencies = [220, 330, 440, 660, 880];
-        frequencies.forEach((freq, i) => {
-          const osc = audioContext.createOscillator();
-          const gain = audioContext.createGain();
-          const filter = audioContext.createBiquadFilter();
+    try {
+      // Web Audio API sound generation with mobile optimization
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Resume context if suspended (mobile requirement)
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      
+      switch (type) {
+        case 'blockPlace':
+          // Short click sound
+          const oscillator1 = audioContext.createOscillator();
+          const gainNode1 = audioContext.createGain();
+          oscillator1.connect(gainNode1);
+          gainNode1.connect(audioContext.destination);
+          oscillator1.frequency.setValueAtTime(800, audioContext.currentTime);
+          gainNode1.gain.setValueAtTime(0.1, audioContext.currentTime);
+          gainNode1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+          oscillator1.start();
+          oscillator1.stop(audioContext.currentTime + 0.1);
+          break;
           
-          osc.connect(filter);
-          filter.connect(gain);
-          gain.connect(audioContext.destination);
+        case 'invalidPlacement':
+          // Error buzzer sound
+          const oscillator2 = audioContext.createOscillator();
+          const gainNode2 = audioContext.createGain();
+          oscillator2.connect(gainNode2);
+          gainNode2.connect(audioContext.destination);
+          oscillator2.frequency.setValueAtTime(150, audioContext.currentTime);
+          oscillator2.frequency.setValueAtTime(120, audioContext.currentTime + 0.1);
+          gainNode2.gain.setValueAtTime(0.2, audioContext.currentTime);
+          gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+          oscillator2.start();
+          oscillator2.stop(audioContext.currentTime + 0.3);
+          break;
           
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(freq, audioContext.currentTime + i * 0.05);
-          osc.frequency.exponentialRampToValueAtTime(freq * 0.5, audioContext.currentTime + i * 0.05 + 0.4);
+        case 'blockbuster':
+          // Epic blockbuster explosion sound
+          const frequencies = [220, 330, 440, 660, 880];
+          frequencies.forEach((freq, i) => {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+            
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioContext.destination);
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, audioContext.currentTime + i * 0.05);
+            osc.frequency.exponentialRampToValueAtTime(freq * 0.5, audioContext.currentTime + i * 0.05 + 0.4);
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(2000, audioContext.currentTime + i * 0.05);
+            filter.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + i * 0.05 + 0.4);
+            
+            gain.gain.setValueAtTime(0.15, audioContext.currentTime + i * 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.05 + 0.5);
+            
+            osc.start(audioContext.currentTime + i * 0.05);
+            osc.stop(audioContext.currentTime + i * 0.05 + 0.5);
+          });
+          break;
           
-          filter.type = 'lowpass';
-          filter.frequency.setValueAtTime(2000, audioContext.currentTime + i * 0.05);
-          filter.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + i * 0.05 + 0.4);
+        case 'gameOver':
+          // Fail sound
+          const oscillator3 = audioContext.createOscillator();
+          const gainNode3 = audioContext.createGain();
+          oscillator3.connect(gainNode3);
+          gainNode3.connect(audioContext.destination);
+          oscillator3.frequency.setValueAtTime(200, audioContext.currentTime);
+          oscillator3.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.5);
+          gainNode3.gain.setValueAtTime(0.3, audioContext.currentTime);
+          gainNode3.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+          oscillator3.start();
+          oscillator3.stop(audioContext.currentTime + 0.5);
+          break;
           
-          gain.gain.setValueAtTime(0.15, audioContext.currentTime + i * 0.05);
-          gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.05 + 0.5);
+        case 'levelUp':
+          // Level up fanfare
+          [523, 659, 784, 1047].forEach((freq, i) => {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.frequency.setValueAtTime(freq, audioContext.currentTime + i * 0.2);
+            gain.gain.setValueAtTime(0.1, audioContext.currentTime + i * 0.2);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.2 + 0.3);
+            osc.start(audioContext.currentTime + i * 0.2);
+            osc.stop(audioContext.currentTime + i * 0.2 + 0.3);
+          });
+          break;
           
-          osc.start(audioContext.currentTime + i * 0.05);
-          osc.stop(audioContext.currentTime + i * 0.05 + 0.5);
-        });
-        break;
-        
-      case 'gameOver':
-        // Fail sound
-        const oscillator3 = audioContext.createOscillator();
-        const gainNode3 = audioContext.createGain();
-        oscillator3.connect(gainNode3);
-        gainNode3.connect(audioContext.destination);
-        oscillator3.frequency.setValueAtTime(200, audioContext.currentTime);
-        oscillator3.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.5);
-        gainNode3.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode3.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-        oscillator3.start();
-        oscillator3.stop(audioContext.currentTime + 0.5);
-        break;
-        
-      case 'levelUp':
-        // Level up fanfare
-        [523, 659, 784, 1047].forEach((freq, i) => {
-          const osc = audioContext.createOscillator();
-          const gain = audioContext.createGain();
-          osc.connect(gain);
-          gain.connect(audioContext.destination);
-          osc.frequency.setValueAtTime(freq, audioContext.currentTime + i * 0.2);
-          gain.gain.setValueAtTime(0.1, audioContext.currentTime + i * 0.2);
-          gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.2 + 0.3);
-          osc.start(audioContext.currentTime + i * 0.2);
-          osc.stop(audioContext.currentTime + i * 0.2 + 0.3);
-        });
-        break;
-        
-      case 'lineClear':
-        // Line clear sound
-        const osc4 = audioContext.createOscillator();
-        const gain4 = audioContext.createGain();
-        osc4.connect(gain4);
-        gain4.connect(audioContext.destination);
-        osc4.frequency.setValueAtTime(1000, audioContext.currentTime);
-        osc4.frequency.exponentialRampToValueAtTime(1500, audioContext.currentTime + 0.3);
-        gain4.gain.setValueAtTime(0.2, audioContext.currentTime);
-        gain4.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-        osc4.start(audioContext.currentTime + 0.3);
-        osc4.stop(audioContext.currentTime + 0.3);
-        break;
+        case 'lineClear':
+          // Line clear sound
+          const osc4 = audioContext.createOscillator();
+          const gain4 = audioContext.createGain();
+          osc4.connect(gain4);
+          gain4.connect(audioContext.destination);
+          osc4.frequency.setValueAtTime(1000, audioContext.currentTime);
+          osc4.frequency.exponentialRampToValueAtTime(1500, audioContext.currentTime + 0.3);
+          gain4.gain.setValueAtTime(0.2, audioContext.currentTime);
+          gain4.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+          osc4.start(audioContext.currentTime);
+          osc4.stop(audioContext.currentTime + 0.3);
+          break;
+      }
+      
+      // Auto-close audio context after use for performance
+      setTimeout(() => {
+        if (audioContext.state !== 'closed') {
+          audioContext.close();
+        }
+      }, 1000);
+      
+    } catch (error) {
+      console.warn('Sound playback failed:', error);
     }
   };
 
@@ -667,6 +752,8 @@ const BlockPuzzleGame = () => {
     setBласtsCount(0);
     setLevel(1);
     setGameOverModalVisible(false);
+    setInvalidPlacement(false);
+    setPreviewPosition(null);
   };
 
   return (
@@ -676,6 +763,15 @@ const BlockPuzzleGame = () => {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-600/20 via-transparent to-transparent"></div>
       
       <div className="max-w-md mx-auto relative z-10">
+        {/* Invalid Placement Shake Animation */}
+        {invalidPlacement && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+            <div className="bg-red-500/80 text-white px-6 py-3 rounded-xl shadow-2xl transform animate-bounce">
+              <div className="text-center font-bold">❌ Can't place there!</div>
+            </div>
+          </div>
+        )}
+
         {/* Combo Animation */}
         {showCombo && (
           <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
@@ -791,12 +887,29 @@ const BlockPuzzleGame = () => {
                 const cellKey = `${rowIndex}-${colIndex}`;
                 const isExploding = explodingCells.has(cellKey);
                 
+                // Check if this cell is part of the preview
+                let isPreview = false;
+                let previewValid = false;
+                if (previewPosition && draggedPiece && isDragging) {
+                  const pieceRow = rowIndex - previewPosition.row;
+                  const pieceCol = colIndex - previewPosition.col;
+                  
+                  if (pieceRow >= 0 && pieceRow < draggedPiece.shape.length &&
+                      pieceCol >= 0 && pieceCol < draggedPiece.shape[0].length &&
+                      draggedPiece.shape[pieceRow][pieceCol] === 1) {
+                    isPreview = true;
+                    previewValid = previewPosition.valid;
+                  }
+                }
+                
                 return (
                   <div
                     key={cellKey}
                     className={`rounded-lg border-2 transition-all duration-300 ${
                       cell === 0 ? 'bg-white/10 border-white/20' : 'border-white/30'
-                    } ${isExploding ? 'animate-ping bg-yellow-400 scale-125' : ''}`}
+                    } ${isExploding ? 'animate-ping bg-yellow-400 scale-125' : ''} ${
+                      isPreview ? (previewValid ? 'bg-green-400/50 border-green-400' : 'bg-red-400/50 border-red-400') : ''
+                    }`}
                     style={{
                       width: `${cellSize}px`,
                       height: `${cellSize}px`,
@@ -804,7 +917,20 @@ const BlockPuzzleGame = () => {
                         ? isExploding 
                           ? 'radial-gradient(circle, #FCD34D, #F59E0B)'
                           : blockColor 
-                        : '',
+                        : isPreview
+                          ? previewValid
+                            ? 'rgba(34, 197, 94, 0.5)'
+                            : 'rgba(239, 68, 68, 0.5)'
+                          : '',
+                      boxShadow: cell !== 0 && !isExploding 
+                        ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.2)' 
+                        : isExploding
+                          ? '0 0 20px #F59E0B, 0 0 40px #F59E0B'
+                          : isPreview && previewValid
+                            ? '0 0 10px rgba(34, 197, 94, 0.8)'
+                            : isPreview && !previewValid
+                              ? '0 0 10px rgba(239, 68, 68, 0.8)'
+                              : '',
                       transform: isExploding ? 'scale(1.3) rotate(45deg)' : 'scale(1)',
                       zIndex: isExploding ? 10 : 'auto',
                       position: 'relative'
@@ -826,7 +952,7 @@ const BlockPuzzleGame = () => {
                   piece.used 
                     ? 'opacity-30 scale-75' 
                     : 'hover:scale-110 active:scale-95 hover:bg-white/10'
-                }`}
+                } ${draggedPiece && draggedPiece.id === piece.id ? 'opacity-30' : ''}`}
                 onMouseDown={(e) => handlePieceStart(e, piece)}
                 onTouchStart={(e) => handlePieceStart(e, piece)}
                 style={{
