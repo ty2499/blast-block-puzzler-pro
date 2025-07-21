@@ -360,14 +360,12 @@ const BlockPuzzleGame = () => {
     e.preventDefault();
   };
 
-  // Handle drag end - place exactly where dropped if valid
+  // Handle drag end - place wherever player wants
   const handleDragEnd = (e) => {
     if (!isDragging || !draggedPiece) return;
     
     const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
     const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
-    
-    let placementSuccessful = false;
     
     // Check if over grid
     const gridElement = document.querySelector('.game-grid');
@@ -381,30 +379,17 @@ const BlockPuzzleGame = () => {
         const targetCol = Math.floor((clientX - gridRect.left) / cellSize);
         const targetRow = Math.floor((clientY - gridRect.top) / cellSize);
         
-        // Only place if exact position is valid - no auto-snapping
-        if (canPlaceExactly(draggedPiece, targetRow, targetCol)) {
+        // Place freely wherever player wants
+        if (canPlacePieceAt(draggedPiece, targetRow, targetCol)) {
           placePieceAt(draggedPiece, targetRow, targetCol);
-          placementSuccessful = true;
-        } else {
-          // Placement failed - show rejection feedback
-          showPlacementRejection();
         }
       }
     }
     
-    // Only reset drag state if placement was successful
-    if (placementSuccessful) {
-      setDraggedPiece(null);
-      setIsDragging(false);
-      setDraggedPiecePosition({ x: 0, y: 0 });
-      setSnapPosition(null);
-    } else {
-      // Reset drag but keep piece available
-      setDraggedPiece(null);
-      setIsDragging(false);
-      setDraggedPiecePosition({ x: 0, y: 0 });
-      setSnapPosition(null);
-    }
+    setDraggedPiece(null);
+    setIsDragging(false);
+    setDraggedPiecePosition({ x: 0, y: 0 });
+    setSnapPosition(null);
   };
 
   // Add event listeners for drag
@@ -522,25 +507,8 @@ const BlockPuzzleGame = () => {
     playLoop();
   };
 
-  // Show placement rejection feedback
-  const showPlacementRejection = () => {
-    // Play error sound
-    if (playingSounds) {
-      playSound('placementError');
-    }
-    
-    // Add shake animation to the piece area
-    const piecesContainer = document.querySelector('.pieces-container');
-    if (piecesContainer) {
-      piecesContainer.classList.add('shake');
-      setTimeout(() => {
-        piecesContainer.classList.remove('shake');
-      }, 500);
-    }
-  };
-
   // Play game sounds
-  const playSound = (type: 'blockPlace' | 'blockbuster' | 'gameOver' | 'levelUp' | 'lineClear' | 'placementError') => {
+  const playSound = (type: 'blockPlace' | 'blockbuster' | 'gameOver' | 'levelUp' | 'lineClear') => {
     if (!playingSounds) return;
     
     // Web Audio API sound generation
@@ -629,27 +597,6 @@ const BlockPuzzleGame = () => {
         gain4.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
         osc4.start();
         osc4.stop(audioContext.currentTime + 0.3);
-        break;
-        
-      case 'placementError':
-        // Error buzz sound
-        const errorOsc1 = audioContext.createOscillator();
-        const errorOsc2 = audioContext.createOscillator();
-        const errorGain = audioContext.createGain();
-        
-        errorOsc1.connect(errorGain);
-        errorOsc2.connect(errorGain);
-        errorGain.connect(audioContext.destination);
-        
-        errorOsc1.frequency.setValueAtTime(150, audioContext.currentTime);
-        errorOsc2.frequency.setValueAtTime(155, audioContext.currentTime); // Slight detuning for harsh sound
-        errorGain.gain.setValueAtTime(0.3, audioContext.currentTime);
-        errorGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-        
-        errorOsc1.start();
-        errorOsc2.start();
-        errorOsc1.stop(audioContext.currentTime + 0.2);
-        errorOsc2.stop(audioContext.currentTime + 0.2);
         break;
     }
   };
@@ -886,7 +833,7 @@ const BlockPuzzleGame = () => {
                       {row.map((cell, colIndex) => (
                         <div
                           key={colIndex}
-                          className={`w-5 h-5 rounded-lg transition-all duration-200 ${
+                          className={`w-8 h-8 rounded-lg transition-all duration-200 ${
                             cell === 1 ? 'shadow-lg' : ''
                           }`}
                           style={{
@@ -921,7 +868,7 @@ const BlockPuzzleGame = () => {
                   {row.map((cell, colIndex) => (
                     <div
                       key={colIndex}
-                      className={`w-5 h-5 rounded-lg ${
+                      className={`w-8 h-8 rounded-lg ${
                         cell === 1 ? 'shadow-lg' : ''
                       }`}
                       style={{
