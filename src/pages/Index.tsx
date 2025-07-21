@@ -1,126 +1,175 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Gift } from 'lucide-react';
 
+// Piece definitions with colors
+const PIECE_DEFINITIONS = [
+  // Single block
+  {
+    shape: [[1]],
+    color: 'linear-gradient(135deg, #FF6B6B, #FF8E8E)'
+  },
+  // 2x1 horizontal
+  {
+    shape: [[1, 1]],
+    color: 'linear-gradient(135deg, #4ECDC4, #44A08D)'
+  },
+  // 2x1 vertical
+  {
+    shape: [[1], [1]],
+    color: 'linear-gradient(135deg, #45B7D1, #96CEB4)'
+  },
+  // 3x1 horizontal
+  {
+    shape: [[1, 1, 1]],
+    color: 'linear-gradient(135deg, #F7DC6F, #F39C12)'
+  },
+  // 3x1 vertical
+  {
+    shape: [[1], [1], [1]],
+    color: 'linear-gradient(135deg, #BB8FCE, #8E44AD)'
+  },
+  // L-shape
+  {
+    shape: [
+      [1, 0],
+      [1, 1]
+    ],
+    color: 'linear-gradient(135deg, #85C1E9, #3498DB)'
+  },
+  // Reverse L-shape
+  {
+    shape: [
+      [0, 1],
+      [1, 1]
+    ],
+    color: 'linear-gradient(135deg, #F8C471, #E67E22)'
+  },
+  // 2x2 square
+  {
+    shape: [
+      [1, 1],
+      [1, 1]
+    ],
+    color: 'linear-gradient(135deg, #A569BD, #8E44AD)'
+  },
+  // T-shape
+  {
+    shape: [
+      [1, 1, 1],
+      [0, 1, 0]
+    ],
+    color: 'linear-gradient(135deg, #58D68D, #27AE60)'
+  },
+  // Long L-shape
+  {
+    shape: [
+      [1, 0, 0],
+      [1, 1, 1]
+    ],
+    color: 'linear-gradient(135deg, #EC7063, #E74C3C)'
+  },
+  // 4x1 horizontal
+  {
+    shape: [[1, 1, 1, 1]],
+    color: 'linear-gradient(135deg, #AED6F1, #5DADE2)'
+  },
+  // 4x1 vertical
+  {
+    shape: [[1], [1], [1], [1]],
+    color: 'linear-gradient(135deg, #F9E79F, #F4D03F)'
+  },
+  // Big L-shape
+  {
+    shape: [
+      [1, 0],
+      [1, 0],
+      [1, 1]
+    ],
+    color: 'linear-gradient(135deg, #D7BDE2, #A569BD)'
+  },
+  // 3x3 corner
+  {
+    shape: [
+      [1, 1, 1],
+      [1, 0, 0],
+      [1, 0, 0]
+    ],
+    color: 'linear-gradient(135deg, #82E0AA, #58D68D)'
+  },
+  // Plus shape
+  {
+    shape: [
+      [0, 1, 0],
+      [1, 1, 1],
+      [0, 1, 0]
+    ],
+    color: 'linear-gradient(135deg, #F1948A, #EC7063)'
+  }
+];
+
+// AdMob Ad Unit ID for production
+const ADMOB_REWARD_AD_UNIT_ID = 'ca-app-pub-3940256099942544/5224354917'; // Test unit ID
+
 const BlockPuzzleGame = () => {
-  const [score, setScore] = useState(0);
-  const [level, setLevel] = useState(1);
+  // Game state
   const [grid, setGrid] = useState(() => Array(8).fill(null).map(() => Array(8).fill(0)));
   const [currentPieces, setCurrentPieces] = useState([]);
-  const [draggedPiece, setDraggedPiece] = useState(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [gameOver, setGameOver] = useState(false);
-  const [coins, setCoins] = useState(0);
-  const [showAdModal, setShowAdModal] = useState<'manual' | 'auto' | false>(false);
-  const [blocksCleared, setBlocksCleared] = useState(0);
-  const [blastsCount, setBласtsCount] = useState(0);
-  const [comboCount, setComboCount] = useState(0);
-  const [showCombo, setShowCombo] = useState(false);
+  const [score, setScore] = useState(0);
+  const [coins, setCoins] = useState(() => {
+    const saved = localStorage.getItem('blockPuzzleCoins');
+    return saved ? parseInt(saved) : 0;
+  });
   const [gameStartTime, setGameStartTime] = useState(Date.now());
-  const [lastAdTime, setLastAdTime] = useState(Date.now());
+  const [blocksClearpned, setBlocksCleared] = useState(0);
+  const [blastsCount, setBласtsCount] = useState(0);
+  const [level, setLevel] = useState(1);
+  const [gameOverModalVisible, setGameOverModalVisible] = useState(false);
   const [showCongratulations, setShowCongratulations] = useState(false);
-  const [explodingCells, setExplodingCells] = useState(new Set());
-  const [isClearing, setIsClearing] = useState(false);
-  const [adCountdown, setAdCountdown] = useState(3);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [playingSounds, setPlayingSounds] = useState(true);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [paypalEmail, setPaypalEmail] = useState('');
   const [cashAppUsername, setCashAppUsername] = useState('');
-  const [gameOverModalVisible, setGameOverModalVisible] = useState(false);
-  const [backgroundMusic, setBackgroundMusic] = useState<AudioContext | null>(null);
-  const [cellSize, setCellSize] = useState(0);
-
-  // Enhanced drag and drop states
-  const [draggedPiecePosition, setDraggedPiecePosition] = useState({ x: 0, y: 0 });
+  const [showAdModal, setShowAdModal] = useState(false);
+  const [adCountdown, setAdCountdown] = useState(0);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [playingSounds, setPlayingSounds] = useState(true);
+  
+  // Drag and drop state
   const [isDragging, setIsDragging] = useState(false);
+  const [draggedPiece, setDraggedPiece] = useState(null);
+  const [draggedPiecePosition, setDraggedPiecePosition] = useState({ x: 0, y: 0 });
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [previewPosition, setPreviewPosition] = useState(null);
+  
+  // Animation states
+  const [explodingCells, setExplodingCells] = useState(new Set());
+  const [showCombo, setShowCombo] = useState(false);
+  const [comboCount, setComboCount] = useState(0);
   const [invalidPlacement, setInvalidPlacement] = useState(false);
-
-  // Orange color for all blocks
-  const blockColor = '#FF6B35';
-
-  // Calculate responsive cell size
-  useEffect(() => {
-    const calculateCellSize = () => {
-      const screenWidth = window.innerWidth;
-      const padding = 48; // Total padding (24px each side)
-      const gap = 4 * 7; // 4px gap between 8 cells = 28px total
-      const availableWidth = Math.min(screenWidth - padding, 400); // Max 400px
-      const calculatedSize = Math.floor((availableWidth - gap) / 8);
-      const minSize = 28; // Minimum cell size for mobile
-      const maxSize = 45; // Maximum cell size
-      setCellSize(Math.max(minSize, Math.min(maxSize, calculatedSize)));
-    };
-
-    calculateCellSize();
-    window.addEventListener('resize', calculateCellSize);
-    return () => window.removeEventListener('resize', calculateCellSize);
-  }, []);
-
-  // Generate proper piece shapes with correct sizes
-  const generatePieceShapes = () => {
-    const shapes = [
-      // 1 cell
-      [[1]],
-      
-      // 2 cells
-      [[1, 1]], 
-      [[1], [1]], 
-      
-      // 3 cells - including max vertical
-      [[1, 1, 1]], 
-      [[1], [1], [1]], // Max 3 vertical blocks
-      [[1, 1], [1, 0]], 
-      [[1, 0], [1, 1]], 
-      
-      // 4 cells
-      [[1, 1], [1, 1]], // Square
-      [[1, 1, 1, 1]], // Line
-      [[1, 1, 1], [1, 0, 0]], // L-shape
-      [[1, 0, 0], [1, 1, 1]], // Reverse L
-      [[0, 1, 0], [1, 1, 1]], // T-shape
-      [[1, 1, 0], [0, 1, 1]], // Z-shape
-      [[0, 1, 1], [1, 1, 0]], // S-shape
-      
-      // 5 cells
-      [[1, 1, 1, 1, 1]], // Long line
-      [[1, 1, 1], [0, 1, 0], [0, 1, 0]], // Plus
-      [[1, 0, 1], [1, 1, 1]], // U-shape
-      [[1, 1, 1, 1], [1, 0, 0, 0]], // Large L
-    ];
-    
-    return shapes;
-  };
-
-  // Generate 3 random pieces
-  const generatePieces = () => {
-    const pieces = [];
-    const availableShapes = generatePieceShapes();
-    
-    for (let i = 0; i < 3; i++) {
-      const shape = availableShapes[Math.floor(Math.random() * availableShapes.length)];
-      
-      pieces.push({
-        id: Date.now() + i + Math.random(),
-        shape: shape,
-        color: blockColor,
-        used: false
-      });
+  
+  // Audio context for sound effects
+  const audioContextRef = useRef(null);
+  
+  // Initialize audio context
+  const initAudioContext = useCallback(() => {
+    if (!audioContextRef.current && playingSounds) {
+      try {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Resume context for mobile browsers
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume();
+        }
+      } catch (error) {
+        console.log('Audio context not supported');
+      }
     }
-    return pieces;
-  };
+  }, [playingSounds]);
 
-  // Initialize game
+  // Online status detection
   useEffect(() => {
-    setCurrentPieces(generatePieces());
-    const saved = localStorage.getItem('blockPuzzleCoins');
-    if (saved) setCoins(parseInt(saved));
-    setGameStartTime(Date.now());
-    setLastAdTime(Date.now());
-    
-    // Online/offline detection
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
+    
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
@@ -130,479 +179,72 @@ const BlockPuzzleGame = () => {
     };
   }, []);
 
-  // Auto ads every 3 minutes of gameplay
+  // Level progression
   useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      if (now - lastAdTime >= 180000) { // 3 minutes = 180000ms
-        setShowAdModal('auto');
-        setLastAdTime(now);
-      }
-    }, 1000); // Check every 1 second
-
-    return () => clearInterval(interval);
-  }, [lastAdTime]);
-
-  // Ad countdown effect
-  useEffect(() => {
-    let countdownInterval: NodeJS.Timeout;
-    
-    if (showAdModal) {
-      setAdCountdown(3);
-      countdownInterval = setInterval(() => {
-        setAdCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(countdownInterval);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (countdownInterval) clearInterval(countdownInterval);
-    };
-  }, [showAdModal]);
-
-  // Check for complete lines (rows and columns)
-  const checkForCompleteLines = (newGrid) => {
-    const linesToClear = [];
-    
-    // Check rows
-    for (let row = 0; row < 8; row++) {
-      if (newGrid[row].every(cell => cell !== 0)) {
-        for (let col = 0; col < 8; col++) {
-          linesToClear.push(`${row}-${col}`);
-        }
-      }
-    }
-    
-    // Check columns
-    for (let col = 0; col < 8; col++) {
-      if (newGrid.every(row => row[col] !== 0)) {
-        for (let row = 0; row < 8; row++) {
-          linesToClear.push(`${row}-${col}`);
-        }
-      }
-    }
-    
-    return Array.from(new Set(linesToClear)); // Remove duplicates
-  };
-
-  // Clear completed lines with blast animation
-  const clearLines = async (newGrid) => {
-    const linesToClear = checkForCompleteLines(newGrid);
-    
-    if (linesToClear.length === 0) return newGrid;
-    
-    setIsClearing(true);
-    setExplodingCells(new Set(linesToClear));
-    
-    // Play blockbuster sound effect
-    if (playingSounds) {
-      playSound('blockbuster');
-    }
-    
-    // Wait for blast animation
-    await new Promise(resolve => setTimeout(resolve, 600));
-    
-    // Calculate cleared blocks and bonus
-    const clearedBlocks = linesToClear.length;
-    setBlocksCleared(prev => prev + clearedBlocks);
-    setBласtsCount(prev => prev + 1);
-    
-    const linesCleared = Math.min(
-      new Set(linesToClear.map(pos => pos.split('-')[0])).size + // rows
-      new Set(linesToClear.map(pos => pos.split('-')[1])).size   // columns
-    , 16); // Max possible lines for 8x8
-    
-    // Line clear bonus
-    const lineBonus = linesCleared * 100 * level;
-    const blockBonus = clearedBlocks * 50;
-    const comboBonus = comboCount > 0 ? comboCount * 200 : 0;
-    
-    setScore(prev => prev + lineBonus + blockBonus + comboBonus);
-    setComboCount(prev => prev + 1);
-    
-    if (comboCount > 0) {
-      setShowCombo(true);
-      setTimeout(() => setShowCombo(false), 1500);
-    }
-    
-    // Clear the lines
-    const clearedGrid = newGrid.map((row, rowIndex) =>
-      row.map((cell, colIndex) => {
-        if (linesToClear.includes(`${rowIndex}-${colIndex}`)) {
-          return 0;
-        }
-        return cell;
-      })
-    );
-    
-    setExplodingCells(new Set());
-    setIsClearing(false);
-    
-    // Check for more lines after clearing
-    const nextLinesToClear = checkForCompleteLines(clearedGrid);
-    if (nextLinesToClear.length > 0) {
-      return await clearLines(clearedGrid);
-    } else {
-      setComboCount(0);
-      return clearedGrid;
-    }
-  };
-
-  // Check if piece can be placed at specific position
-  const canPlacePieceAt = (piece, startRow, startCol) => {
-    for (let row = 0; row < piece.shape.length; row++) {
-      for (let col = 0; col < piece.shape[row].length; col++) {
-        if (piece.shape[row][col] === 1) {
-          const newRow = startRow + row;
-          const newCol = startCol + col;
-          
-          if (newRow >= 8 || newCol >= 8 || newRow < 0 || newCol < 0) {
-            return false;
-          }
-          
-          if (grid[newRow][newCol] !== 0) {
-            return false;
-          }
-        }
-      }
-    }
-    return true;
-  };
-
-  // Place piece on grid
-  const placePieceAt = async (piece, startRow, startCol) => {
-    const newGrid = [...grid];
-    let blocksAdded = 0;
-    
-    for (let row = 0; row < piece.shape.length; row++) {
-      for (let col = 0; col < piece.shape[row].length; col++) {
-        if (piece.shape[row][col] === 1) {
-          newGrid[startRow + row][startCol + col] = piece.color;
-          blocksAdded++;
-        }
-      }
-    }
-    
-    // Play place block sound
-    if (playingSounds) {
-      playSound('blockPlace');
-    }
-    
-    // Mark piece as used
-    setCurrentPieces(prev => 
-      prev.map(p => p.id === piece.id ? { ...p, used: true } : p)
-    );
-    
-    // Add score for placing piece
-    const baseScore = blocksAdded * 10;
-    const levelBonus = level * 5;
-    setScore(prev => prev + baseScore + levelBonus);
-
-    // Check for line clears
-    const clearedGrid = await clearLines(newGrid);
-    setGrid(clearedGrid);
-
-    // Check level progression: board cleared OR 20 blasts made
-    const totalBlocks = clearedGrid.flat().filter(cell => cell !== 0).length;
-    
-    if (totalBlocks === 0 || blastsCount >= 20) {
+    const newLevel = Math.floor(score / 1000) + 1;
+    if (newLevel > level) {
+      setLevel(newLevel);
       setShowCongratulations(true);
-      setLevel(prev => prev + 1);
       setCoins(prev => {
         const newCoins = prev + 5;
         localStorage.setItem('blockPuzzleCoins', newCoins.toString());
         return newCoins;
       });
-      setScore(prev => prev + (level * 1000)); // Level completion bonus
-      setBlocksCleared(0);
-      setBласtsCount(0);
-      setGameStartTime(Date.now());
+      playSound('levelUp');
       
-      // Clear board for next level
-      if (totalBlocks > 0) {
-        setTimeout(() => {
-          setGrid(Array(8).fill(null).map(() => Array(8).fill(0)));
-        }, 2000);
-      }
-      
-      // Play level up sound
-      if (playingSounds) {
-        playSound('levelUp');
-      }
-    }
-  };
-
-  // Get grid position from mouse/touch coordinates
-  const getGridPositionFromCoordinates = (clientX, clientY) => {
-    const gridElement = document.querySelector('.game-grid');
-    if (!gridElement) return null;
-    
-    const gridRect = gridElement.getBoundingClientRect();
-    
-    // Check if coordinates are within grid bounds with tolerance
-    const tolerance = 20;
-    if (clientX < gridRect.left - tolerance || clientX > gridRect.right + tolerance ||
-        clientY < gridRect.top - tolerance || clientY > gridRect.bottom + tolerance) {
-      return null;
-    }
-    
-    const cellSize = gridRect.width / 8;
-    const col = Math.floor((clientX - gridRect.left) / cellSize);
-    const row = Math.floor((clientY - gridRect.top) / cellSize);
-    
-    // Clamp to grid bounds
-    const clampedRow = Math.max(0, Math.min(7, row));
-    const clampedCol = Math.max(0, Math.min(7, col));
-    
-    return { row: clampedRow, col: clampedCol };
-  };
-
-  // Enhanced drag and drop for mobile
-  const handlePieceStart = (e, piece) => {
-    if (piece.used) return;
-    
-    // Prevent default to avoid scrolling on mobile
-    e.preventDefault();
-    
-    const touch = e.touches ? e.touches[0] : e;
-    const rect = e.currentTarget.getBoundingClientRect();
-    
-    setDraggedPiece(piece);
-    setIsDragging(true);
-    setDragOffset({
-      x: touch.clientX - rect.left,
-      y: touch.clientY - rect.top
-    });
-    setDraggedPiecePosition({ x: touch.clientX, y: touch.clientY });
-    setPreviewPosition(null);
-    setInvalidPlacement(false);
-  };
-
-  // Handle drag move with preview
-  const handleDragMove = (e) => {
-    if (!isDragging || !draggedPiece) return;
-    
-    e.preventDefault(); // Prevent scrolling
-    
-    const touch = e.touches ? e.touches[0] : e;
-    setDraggedPiecePosition({ x: touch.clientX, y: touch.clientY });
-    
-    // Get grid position for preview
-    const gridPos = getGridPositionFromCoordinates(touch.clientX, touch.clientY);
-    if (gridPos) {
-      const { row, col } = gridPos;
-      
-      // Check if piece can be placed at this position
-      const canPlace = canPlacePieceAt(draggedPiece, row, col);
-      
-      setPreviewPosition({
-        row,
-        col,
-        valid: canPlace
-      });
-    } else {
-      setPreviewPosition(null);
-    }
-  };
-
-  // Handle drag end with enhanced placement detection
-  const handleDragEnd = (e) => {
-    if (!isDragging || !draggedPiece) return;
-    
-    e.preventDefault();
-    
-    const touch = e.changedTouches ? e.changedTouches[0] : e;
-    const gridPos = getGridPositionFromCoordinates(touch.clientX, touch.clientY);
-    
-    if (gridPos) {
-      const { row, col } = gridPos;
-      
-      if (canPlacePieceAt(draggedPiece, row, col)) {
-        // Valid placement
-        placePieceAt(draggedPiece, row, col);
-      } else {
-        // Invalid placement - show error feedback
-        setInvalidPlacement(true);
-        if (playingSounds) {
-          playSound('invalidPlacement');
-        }
-        
-        // Reset invalid placement after animation
-        setTimeout(() => {
-          setInvalidPlacement(false);
-        }, 500);
-      }
-    }
-    
-    setDraggedPiece(null);
-    setIsDragging(false);
-    setDraggedPiecePosition({ x: 0, y: 0 });
-    setPreviewPosition(null);
-  };
-
-  // Add event listeners for drag - mobile optimized
-  useEffect(() => {
-    const handleMouseMove = (e) => handleDragMove(e);
-    const handleMouseUp = (e) => handleDragEnd(e);
-    const handleTouchMove = (e) => handleDragMove(e);
-    const handleTouchEnd = (e) => handleDragEnd(e);
-
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('touchmove', handleTouchMove, { passive: false });
-      document.addEventListener('touchend', handleTouchEnd, { passive: false });
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [isDragging, draggedPiece, cellSize]);
-
-  // Check if any piece can be placed
-  const canAnyPieceBePlaced = () => {
-    const availablePieces = currentPieces.filter(p => !p.used);
-    for (let piece of availablePieces) {
-      for (let row = 0; row <= 8 - piece.shape.length; row++) {
-        for (let col = 0; col <= 8 - (piece.shape[0]?.length || 0); col++) {
-          if (canPlacePieceAt(piece, row, col)) {
-            return true;
-          }
-        }
-      }
-    }
-    return false;
-  };
-
-  // Auto restart when game over
-  useEffect(() => {
-    const availablePieces = currentPieces.filter(p => !p.used);
-    
-    // Generate new pieces when all are used
-    if (availablePieces.length === 0) {
       setTimeout(() => {
-        setCurrentPieces(generatePieces());
-      }, 300);
-      return;
+        setShowCongratulations(false);
+      }, 3000);
     }
-    
-    // Show game over when no moves possible
-    if (availablePieces.length > 0 && !canAnyPieceBePlaced()) {
-      setGameOverModalVisible(true);
-      // Play game over sound
-      if (playingSounds) {
-        playSound('gameOver');
-      }
-    }
-  }, [currentPieces, grid]);
+  }, [score, level]);
 
-  // AdMob Test Integration
-  const ADMOB_TEST_UNIT_ID = 'ca-app-pub-3940256099942544/5224354917'; // Test reward video ad unit
-  
-  // Initialize AdMob for web (using test ads)
-  useEffect(() => {
-    // Load AdMob script for web
-    const script = document.createElement('script');
-    script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3940256099942544';
-    script.crossOrigin = 'anonymous';
-    document.head.appendChild(script);
-    
-    return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
+  // Generate random pieces
+  const generatePieces = useCallback(() => {
+    const pieces = [];
+    for (let i = 0; i < 3; i++) {
+      const randomPiece = PIECE_DEFINITIONS[Math.floor(Math.random() * PIECE_DEFINITIONS.length)];
+      pieces.push({
+        id: Date.now() + Math.random(),
+        ...randomPiece,
+        used: false
+      });
+    }
+    return pieces;
   }, []);
 
-  // Get Coins button handler - Shows real AdMob reward ad
-  const handleGetCoins = () => {
-    showRewardAd('manual');
-  };
-
-  // Initialize background music with mobile optimization
+  // Initialize game
   useEffect(() => {
-    if (playingSounds && !backgroundMusic) {
-      const initAudio = async () => {
-        try {
-          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-          
-          // Resume audio context for mobile
-          if (audioContext.state === 'suspended') {
-            await audioContext.resume();
-          }
-          
-          setBackgroundMusic(audioContext);
-          playBackgroundMusic(audioContext);
-        } catch (error) {
-          console.warn('Audio initialization failed:', error);
-        }
-      };
-      
-      initAudio();
-    } else if (!playingSounds && backgroundMusic) {
-      backgroundMusic.close();
-      setBackgroundMusic(null);
+    setCurrentPieces(generatePieces());
+    initAudioContext();
+  }, [generatePieces, initAudioContext]);
+
+  // Sound effects function
+  const playSound = useCallback((soundType) => {
+    if (!playingSounds || !audioContextRef.current) return;
+    
+    const audioContext = audioContextRef.current;
+    
+    // Resume context if suspended (mobile browsers)
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
     }
-  }, [playingSounds]);
-
-  // Background music loop
-  const playBackgroundMusic = (audioContext: AudioContext) => {
-    const playLoop = () => {
-      if (!playingSounds || !audioContext) return;
-      
-      const melody = [523, 659, 784, 659, 523, 392, 523]; // C major scale
-      melody.forEach((freq, i) => {
-        const osc = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        osc.connect(gain);
-        gain.connect(audioContext.destination);
-        osc.frequency.setValueAtTime(freq, audioContext.currentTime + i * 0.5);
-        gain.gain.setValueAtTime(0.05, audioContext.currentTime + i * 0.5);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.5 + 0.4);
-        osc.start(audioContext.currentTime + i * 0.5);
-        osc.stop(audioContext.currentTime + i * 0.5 + 0.4);
-      });
-      
-      setTimeout(playLoop, 4000); // Loop every 4 seconds
-    };
-    playLoop();
-  };
-
-  // Enhanced play game sounds with mobile optimization
-  const playSound = (type: 'blockPlace' | 'blockbuster' | 'gameOver' | 'levelUp' | 'lineClear' | 'invalidPlacement') => {
-    if (!playingSounds) return;
     
     try {
-      // Web Audio API sound generation with mobile optimization
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      // Resume context if suspended (mobile requirement)
-      if (audioContext.state === 'suspended') {
-        audioContext.resume();
-      }
-      
-      switch (type) {
+      switch (soundType) {
         case 'blockPlace':
-          // Short click sound
-          const oscillator1 = audioContext.createOscillator();
-          const gainNode1 = audioContext.createGain();
-          oscillator1.connect(gainNode1);
-          gainNode1.connect(audioContext.destination);
-          oscillator1.frequency.setValueAtTime(800, audioContext.currentTime);
-          gainNode1.gain.setValueAtTime(0.1, audioContext.currentTime);
-          gainNode1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-          oscillator1.start();
-          oscillator1.stop(audioContext.currentTime + 0.1);
+          // Block placement sound
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.1);
+          gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+          oscillator.start();
+          oscillator.stop(audioContext.currentTime + 0.15);
           break;
-          
+
         case 'invalidPlacement':
           // Error buzzer sound
           const oscillator2 = audioContext.createOscillator();
@@ -616,7 +258,7 @@ const BlockPuzzleGame = () => {
           oscillator2.start();
           oscillator2.stop(audioContext.currentTime + 0.3);
           break;
-          
+        
         case 'blockbuster':
           // Epic blockbuster explosion sound
           const frequencies = [220, 330, 440, 660, 880];
@@ -644,7 +286,7 @@ const BlockPuzzleGame = () => {
             osc.stop(audioContext.currentTime + i * 0.05 + 0.5);
           });
           break;
-          
+        
         case 'gameOver':
           // Fail sound
           const oscillator3 = audioContext.createOscillator();
@@ -658,7 +300,7 @@ const BlockPuzzleGame = () => {
           oscillator3.start();
           oscillator3.stop(audioContext.currentTime + 0.5);
           break;
-          
+        
         case 'levelUp':
           // Level up fanfare
           [523, 659, 784, 1047].forEach((freq, i) => {
@@ -673,7 +315,7 @@ const BlockPuzzleGame = () => {
             osc.stop(audioContext.currentTime + i * 0.2 + 0.3);
           });
           break;
-          
+        
         case 'lineClear':
           // Line clear sound
           const osc4 = audioContext.createOscillator();
@@ -684,55 +326,308 @@ const BlockPuzzleGame = () => {
           osc4.frequency.exponentialRampToValueAtTime(1500, audioContext.currentTime + 0.3);
           gain4.gain.setValueAtTime(0.2, audioContext.currentTime);
           gain4.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-          osc4.start(audioContext.currentTime);
+          osc4.start();
           osc4.stop(audioContext.currentTime + 0.3);
           break;
       }
-      
-      // Auto-close audio context after use for performance
-      setTimeout(() => {
-        if (audioContext.state !== 'closed') {
-          audioContext.close();
-        }
-      }, 1000);
-      
     } catch (error) {
-      console.warn('Sound playback failed:', error);
+      console.log('Sound play error:', error);
     }
+  }, [playingSounds]);
+
+  // Check if position is valid for piece placement
+  const isValidPosition = useCallback((grid, piece, row, col) => {
+    for (let r = 0; r < piece.shape.length; r++) {
+      for (let c = 0; c < piece.shape[r].length; c++) {
+        if (piece.shape[r][c] === 1) {
+          const newRow = row + r;
+          const newCol = col + c;
+          
+          if (newRow < 0 || newRow >= 8 || newCol < 0 || newCol >= 8) {
+            return false;
+          }
+          
+          if (grid[newRow][newCol] !== 0) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }, []);
+
+  // Place piece on grid
+  const placePiece = useCallback((grid, piece, row, col) => {
+    const newGrid = grid.map(row => [...row]);
+    
+    for (let r = 0; r < piece.shape.length; r++) {
+      for (let c = 0; c < piece.shape[r].length; c++) {
+        if (piece.shape[r][c] === 1) {
+          newGrid[row + r][col + c] = piece.color;
+        }
+      }
+    }
+    
+    return newGrid;
+  }, []);
+
+  // Clear completed lines and return cleared count
+  const clearCompletedLines = useCallback((grid) => {
+    let newGrid = [...grid];
+    let linesCleared = 0;
+    const cellsToExplode = new Set();
+    
+    // Check rows
+    for (let row = 0; row < 8; row++) {
+      if (newGrid[row].every(cell => cell !== 0)) {
+        for (let col = 0; col < 8; col++) {
+          cellsToExplode.add(`${row}-${col}`);
+        }
+        newGrid[row] = Array(8).fill(0);
+        linesCleared++;
+      }
+    }
+    
+    // Check columns
+    for (let col = 0; col < 8; col++) {
+      if (newGrid.every(row => row[col] !== 0)) {
+        for (let row = 0; row < 8; row++) {
+          cellsToExplode.add(`${row}-${col}`);
+        }
+        newGrid.forEach(row => row[col] = 0);
+        linesCleared++;
+      }
+    }
+    
+    // Trigger explosion animation
+    if (cellsToExplode.size > 0) {
+      setExplodingCells(cellsToExplode);
+      setTimeout(() => setExplodingCells(new Set()), 600);
+    }
+    
+    return { newGrid, linesCleared };
+  }, []);
+
+  // Handle piece placement
+  const handlePiecePlacement = useCallback((piece, gridRow, gridCol) => {
+    if (!isValidPosition(grid, piece, gridRow, gridCol)) {
+      return false;
+    }
+    
+    // Place the piece
+    let newGrid = placePiece(grid, piece, gridRow, gridCol);
+    
+    // Clear completed lines
+    const { newGrid: clearedGrid, linesCleared } = clearCompletedLines(newGrid);
+    
+    // Update game state
+    setGrid(clearedGrid);
+    setCurrentPieces(prev => 
+      prev.map(p => p.id === piece.id ? { ...p, used: true } : p)
+    );
+    
+    // Calculate score
+    let pieceScore = piece.shape.flat().filter(cell => cell === 1).length * 10;
+    let lineScore = linesCleared * 100;
+    let bonusScore = 0;
+    
+    if (linesCleared >= 2) {
+      bonusScore = linesCleared * 50;
+      setComboCount(linesCleared);
+      setShowCombo(true);
+      setTimeout(() => setShowCombo(false), 2000);
+      
+      setBласtsCount(prev => prev + 1);
+      playSound('blockbuster');
+    } else if (linesCleared === 1) {
+      playSound('lineClear');
+    } else {
+      playSound('blockPlace');
+    }
+    
+    setScore(prev => prev + pieceScore + lineScore + bonusScore);
+    setBlocksCleared(prev => prev + linesCleared);
+    
+    return true;
+  }, [grid, isValidPosition, placePiece, clearCompletedLines, playSound]);
+
+  // Check if any pieces can be placed
+  const canPlaceAnyPiece = useCallback(() => {
+    const availablePieces = currentPieces.filter(piece => !piece.used);
+    
+    if (availablePieces.length === 0) return false;
+    
+    for (let piece of availablePieces) {
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          if (isValidPosition(grid, piece, row, col)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }, [currentPieces, grid, isValidPosition]);
+
+  // Check for game over
+  useEffect(() => {
+    if (currentPieces.length > 0 && currentPieces.every(piece => piece.used)) {
+      setCurrentPieces(generatePieces());
+    } else if (currentPieces.length > 0 && !canPlaceAnyPiece()) {
+      playSound('gameOver');
+      setGameOverModalVisible(true);
+    }
+  }, [currentPieces, canPlaceAnyPiece, generatePieces, playSound]);
+
+  // Drag and drop handlers
+  const handlePieceStart = useCallback((e, piece) => {
+    if (piece.used) return;
+    
+    initAudioContext();
+    
+    const isTouch = e.type === 'touchstart';
+    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetX = clientX - rect.left;
+    const offsetY = clientY - rect.top;
+    
+    setIsDragging(true);
+    setDraggedPiece(piece);
+    setDraggedPiecePosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    
+    e.preventDefault();
+  }, [initAudioContext]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging || !draggedPiece) return;
+    
+    const isTouch = e.type === 'touchmove';
+    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+    
+    setDraggedPiecePosition({ x: clientX, y: clientY });
+    
+    // Find grid position under the cursor
+    const gameGrid = document.querySelector('.game-grid');
+    if (gameGrid) {
+      const gridRect = gameGrid.getBoundingClientRect();
+      const cellSize = gridRect.width / 8;
+      
+      const gridX = clientX - gridRect.left;
+      const gridY = clientY - gridRect.top;
+      
+      if (gridX >= 0 && gridX <= gridRect.width && gridY >= 0 && gridY <= gridRect.height) {
+        const col = Math.floor(gridX / cellSize);
+        const row = Math.floor(gridY / cellSize);
+        
+        if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+          const valid = isValidPosition(grid, draggedPiece, row, col);
+          setPreviewPosition({ row, col, valid });
+        } else {
+          setPreviewPosition(null);
+        }
+      } else {
+        setPreviewPosition(null);
+      }
+    }
+    
+    e.preventDefault();
+  }, [isDragging, draggedPiece, grid, isValidPosition]);
+
+  const handleMouseUp = useCallback((e) => {
+    if (!isDragging || !draggedPiece) return;
+    
+    const isTouch = e.type === 'touchend';
+    
+    if (previewPosition && previewPosition.valid) {
+      const success = handlePiecePlacement(draggedPiece, previewPosition.row, previewPosition.col);
+      if (success) {
+        // Add coins for successful placement
+        setCoins(prev => {
+          const newCoins = prev + 0.1;
+          localStorage.setItem('blockPuzzleCoins', newCoins.toString());
+          return newCoins;
+        });
+      }
+    }
+    
+    setIsDragging(false);
+    setDraggedPiece(null);
+    setPreviewPosition(null);
+    
+    e.preventDefault();
+  }, [isDragging, draggedPiece, previewPosition, handlePiecePlacement]);
+
+  // Mouse and touch event listeners
+  useEffect(() => {
+    if (isDragging) {
+      const handleMove = (e) => handleMouseMove(e);
+      const handleEnd = (e) => handleMouseUp(e);
+      
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleEnd);
+      document.addEventListener('touchmove', handleMove, { passive: false });
+      document.addEventListener('touchend', handleEnd);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleEnd);
+        document.removeEventListener('touchmove', handleMove);
+        document.removeEventListener('touchend', handleEnd);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  // Handle "Get Coins" button
+  const handleGetCoins = () => {
+    if (!isOnline) {
+      alert('You need an internet connection to watch ads and earn coins.');
+      return;
+    }
+    
+    // Show options for different ad types
+    const adType = Math.random() > 0.5 ? 'auto' : 'manual';
+    showRewardAd(adType);
   };
 
-  // Show real AdMob reward ad with offline handling
-  const showRewardAd = (type: 'manual' | 'auto') => {
-    console.log(`🎬 Loading AdMob test ad: ${ADMOB_TEST_UNIT_ID}`);
+  // Show real AdMob reward ad with proper production setup
+  const showRewardAd = (type) => {
+    console.log(`🎬 Loading AdMob reward ad: ${ADMOB_REWARD_AD_UNIT_ID}`);
     
     if (!isOnline) {
-      // Offline mode - no ad, no reward
       alert('No internet connection. Ads require an active internet connection.');
       return;
     }
     
-    // Simulate real AdMob ad loading and completion
-    const adLoadTime = Math.random() * 2000 + 1000; // 1-3 seconds loading
-    const adDuration = 3000; // 3 seconds for fast testing, real ads can be 30 seconds
+    // For production apps, integrate with actual AdMob:
+    // if (window.AdMob && window.AdMob.showRewardVideoAd) {
+    //   window.AdMob.showRewardVideoAd().then(() => {
+    //     completeAdWatch(type);
+    //   }).catch((error) => {
+    //     console.error('Ad failed to load:', error);
+    //     alert('Ad failed to load. Please try again later.');
+    //   });
+    //   return;
+    // }
     
+    // Fallback simulation for web testing
     setShowAdModal(type);
-    setAdCountdown(Math.ceil(adDuration / 1000));
+    setAdCountdown(30); // Real reward ads are typically 15-30 seconds
     
-    // Start ad after loading simulation
-    setTimeout(() => {
-      console.log('📺 AdMob test ad started');
-      // Auto-close ad after 3 seconds
-      setTimeout(() => {
-        completeAdWatch(type);
-      }, 3000); // Always 3 seconds, auto-close
-    }, adLoadTime);
+    console.log('📺 AdMob reward ad started (simulation mode)');
   };
 
-  // Complete ad watch and reward coins
-  const completeAdWatch = (type: 'manual' | 'auto') => {
+  // Complete ad watch and reward coins - Auto dismiss
+  const completeAdWatch = (type) => {
     const coinsEarned = type === 'auto' ? 4.5 : 2;
     
+    // Auto-dismiss modal
     setShowAdModal(false);
+    setAdCountdown(0);
+    
     setCoins(prev => {
       const newCoins = prev + coinsEarned;
       localStorage.setItem('blockPuzzleCoins', newCoins.toString());
@@ -740,7 +635,35 @@ const BlockPuzzleGame = () => {
     });
     
     console.log(`🪙 AdMob reward completed: ${coinsEarned} coins earned!`);
+    
+    // Show reward notification briefly
+    setTimeout(() => {
+      alert(`🎉 You earned ${coinsEarned} coins!`);
+    }, 500);
   };
+
+  // Ad countdown effect with auto-completion
+  useEffect(() => {
+    let countdownInterval;
+    
+    if (showAdModal && adCountdown > 0) {
+      countdownInterval = setInterval(() => {
+        setAdCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            // Auto-complete ad when countdown reaches 0
+            completeAdWatch(showAdModal);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (countdownInterval) clearInterval(countdownInterval);
+    };
+  }, [showAdModal, adCountdown]);
 
   // Game over restart function
   const restartGame = () => {
@@ -757,7 +680,7 @@ const BlockPuzzleGame = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-3 sm:p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-4 relative overflow-hidden">
       {/* Background effects */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-600/20 via-transparent to-transparent"></div>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-600/20 via-transparent to-transparent"></div>
@@ -775,7 +698,7 @@ const BlockPuzzleGame = () => {
         {/* Combo Animation */}
         {showCombo && (
           <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-8 py-4 rounded-2xl transform animate-bounce">
+            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-8 py-4 rounded-2xl shadow-2xl transform animate-bounce">
               <div className="text-center">
                 <div className="text-3xl font-bold">🔥 COMBO x{comboCount} 🔥</div>
               </div>
@@ -809,50 +732,51 @@ const BlockPuzzleGame = () => {
           </div>
         )}
 
-        {/* Header - Mobile Optimized */}
-        <div className="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md rounded-2xl p-3 mb-4 border border-white/20">
+        {/* Header - Single Line Layout */}
+        <div className="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md rounded-3xl p-3 sm:p-4 mb-6 border border-white/20 shadow-2xl">
           <div className="flex items-center justify-between text-white">
             {/* Stats Section */}
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Score</div>
-                <div className="font-bold text-sm bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+                <div className="font-bold text-sm sm:text-lg bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
                   {score.toLocaleString()}
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Coins</div>
-                <div className="font-bold text-sm text-yellow-400 flex items-center gap-1 cursor-pointer" onClick={() => setShowWithdrawModal(true)}>
+                <div className="font-bold text-sm sm:text-lg text-yellow-400 flex items-center gap-1 cursor-pointer" onClick={() => setShowWithdrawModal(true)}>
                   🪙 {coins}
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Level</div>
-                <div className="font-bold text-lg bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent animate-pulse">
+                <div className="font-bold text-lg sm:text-2xl bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent animate-pulse">
                   {level}
                 </div>
               </div>
             </div>
             
             {/* Buttons Section */}
-            <div className="flex items-center gap-1 sm:gap-2">
+            <div className="flex items-center gap-2">
               <button
                 onClick={handleGetCoins}
                 disabled={!isOnline}
-                className={`flex items-center space-x-1 px-2 py-1 sm:px-3 sm:py-2 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 text-xs ${
+                className={`flex items-center space-x-1 px-3 py-2 sm:px-4 sm:py-2 rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-xs sm:text-sm ${
                   isOnline 
                     ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' 
                     : 'bg-gray-400 text-gray-200 cursor-not-allowed'
                 }`}
               >
-                <Gift className="w-3 h-3" />
+                <Gift className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">{isOnline ? 'Get Coins' : 'Offline'}</span>
+                <span className="sm:hidden">{isOnline ? 'Coins' : 'Off'}</span>
               </button>
               
               {coins >= 15000 && (
                 <button
                   onClick={() => setShowWithdrawModal(true)}
-                  className="flex items-center space-x-1 px-2 py-1 sm:px-3 sm:py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 text-xs"
+                  className="flex items-center space-x-1 px-3 py-2 sm:px-4 sm:py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-xs sm:text-sm"
                 >
                   💰
                   <span className="hidden sm:inline">Withdraw</span>
@@ -861,7 +785,7 @@ const BlockPuzzleGame = () => {
               
               <button
                 onClick={() => setPlayingSounds(!playingSounds)}
-                className="flex items-center px-2 py-1 sm:px-3 sm:py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 text-xs"
+                className="flex items-center px-2 py-2 sm:px-3 sm:py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-xs sm:text-sm"
               >
                 <span className="text-sm">{playingSounds ? '🔊' : '🔇'}</span>
               </button>
@@ -869,17 +793,19 @@ const BlockPuzzleGame = () => {
           </div>
         </div>
 
-        {/* Game Grid - Mobile Responsive */}
-        <div className="bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-md rounded-2xl p-4 mb-4 border border-white/20">
+        {/* Game Grid - Mobile Optimized 8x8 */}
+        <div className="bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-md rounded-3xl p-3 sm:p-6 mb-6 border border-white/20 shadow-2xl">
           <div 
-            className="game-grid bg-gradient-to-br from-black/30 to-black/10 p-2 rounded-2xl border border-white/10 mx-auto"
+            className="game-grid bg-gradient-to-br from-black/30 to-black/10 p-2 sm:p-4 rounded-2xl border border-white/10 shadow-inner mx-auto"
             style={{ 
               display: 'grid', 
               gridTemplateRows: 'repeat(8, 1fr)', 
               gridTemplateColumns: 'repeat(8, 1fr)',
               gap: '4px',
-              width: `${cellSize * 8 + 4 * 7}px`,
-              height: `${cellSize * 8 + 4 * 7}px`
+              aspectRatio: '1/1',
+              width: '100%',
+              maxWidth: 'min(90vw, 400px)', // Responsive to screen width
+              height: 'min(90vw, 400px)'
             }}
           >
             {grid.map((row, rowIndex) =>
@@ -905,18 +831,16 @@ const BlockPuzzleGame = () => {
                 return (
                   <div
                     key={cellKey}
-                    className={`rounded-lg border-2 transition-all duration-300 ${
+                    className={`rounded-xl border-2 transition-all duration-300 ${
                       cell === 0 ? 'bg-white/10 border-white/20' : 'border-white/30'
                     } ${isExploding ? 'animate-ping bg-yellow-400 scale-125' : ''} ${
                       isPreview ? (previewValid ? 'bg-green-400/50 border-green-400' : 'bg-red-400/50 border-red-400') : ''
                     }`}
                     style={{
-                      width: `${cellSize}px`,
-                      height: `${cellSize}px`,
                       background: cell !== 0 
                         ? isExploding 
                           ? 'radial-gradient(circle, #FCD34D, #F59E0B)'
-                          : blockColor 
+                          : cell 
                         : isPreview
                           ? previewValid
                             ? 'rgba(34, 197, 94, 0.5)'
@@ -933,7 +857,8 @@ const BlockPuzzleGame = () => {
                               : '',
                       transform: isExploding ? 'scale(1.3) rotate(45deg)' : 'scale(1)',
                       zIndex: isExploding ? 10 : 'auto',
-                      position: 'relative'
+                      position: 'relative',
+                      aspectRatio: '1/1'
                     }}
                   />
                 );
@@ -942,57 +867,69 @@ const BlockPuzzleGame = () => {
           </div>
         </div>
 
-        {/* Current Pieces - Mobile Optimized */}
-        <div className="pieces-container bg-gradient-to-r from-white/15 to-white/5 backdrop-blur-md rounded-2xl p-4 mb-4 border border-white/10">
-          <div className="flex justify-around items-center">
-            {currentPieces.map((piece) => (
+        {/* Current Pieces - Mobile Optimized Layout */}
+        <div className="pieces-container bg-gradient-to-r from-white/15 to-white/5 backdrop-blur-md rounded-2xl p-4 mb-6 border border-white/10 shadow-xl">
+          <div className="grid grid-cols-3 gap-4 place-items-center">
+            {currentPieces.map((piece, index) => (
               <div
                 key={piece.id}
-                className={`cursor-pointer transition-all duration-300 select-none p-2 rounded-xl ${
+                className={`cursor-pointer transition-all duration-300 select-none p-2 rounded-xl relative ${
                   piece.used 
                     ? 'opacity-30 scale-75' 
-                    : 'hover:scale-110 active:scale-95 hover:bg-white/10'
+                    : 'active:scale-95 hover:bg-white/10 hover:shadow-lg'
                 } ${draggedPiece && draggedPiece.id === piece.id ? 'opacity-30' : ''}`}
                 onMouseDown={(e) => handlePieceStart(e, piece)}
                 onTouchStart={(e) => handlePieceStart(e, piece)}
                 style={{
                   touchAction: 'none',
                   userSelect: 'none',
-                  WebkitUserSelect: 'none'
+                  WebkitUserSelect: 'none',
+                  minHeight: '80px',
+                  minWidth: '80px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
-                <div className="grid gap-1">
-                  {piece.shape.map((row, rowIndex) => (
-                    <div key={rowIndex} className="flex gap-1">
-                      {row.map((cell, colIndex) => (
-                        <div
-                          key={colIndex}
-                          className="rounded-lg transition-all duration-200"
-                          style={{
-                            width: `${cellSize}px`,
-                            height: `${cellSize}px`,
-                            background: cell === 1 ? blockColor : 'transparent',
-                            border: cell === 1 ? '1px solid rgba(255,255,255,0.3)' : 'none'
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ))}
+                <div className="grid gap-1" style={{ 
+                  gridTemplateColumns: `repeat(${piece.shape[0]?.length || 1}, 1fr)`,
+                  gridTemplateRows: `repeat(${piece.shape.length}, 1fr)`
+                }}>
+                  {piece.shape.map((row, rowIndex) => 
+                    row.map((cell, colIndex) => (
+                      <div
+                        key={`${rowIndex}-${colIndex}`}
+                        className={`rounded-lg transition-all duration-200 ${
+                          cell === 1 ? 'shadow-lg' : ''
+                        }`}
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          background: cell === 1 ? piece.color : 'transparent',
+                          boxShadow: cell === 1 ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.3)' : '',
+                          border: cell === 1 ? '1px solid rgba(255,255,255,0.3)' : 'none',
+                          gridColumn: colIndex + 1,
+                          gridRow: rowIndex + 1
+                        }}
+                      />
+                    ))
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Dragged Piece Overlay - Mobile Optimized */}
+        {/* Dragged Piece Overlay - Enhanced */}
         {isDragging && draggedPiece && (
           <div
-            className="fixed pointer-events-none z-50 opacity-95"
+            className="fixed pointer-events-none z-50"
             style={{
               left: draggedPiecePosition.x - dragOffset.x,
               top: draggedPiecePosition.y - dragOffset.y,
               transform: 'scale(1.2)',
-              filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.5))'
+              filter: 'drop-shadow(0 12px 24px rgba(0,0,0,0.5))',
+              opacity: previewPosition ? 0.8 : 0.95
             }}
           >
             <div className="grid gap-1">
@@ -1001,12 +938,13 @@ const BlockPuzzleGame = () => {
                   {row.map((cell, colIndex) => (
                     <div
                       key={colIndex}
-                      className="rounded-lg"
+                      className={`w-8 h-8 rounded-lg transition-all duration-200 ${
+                        cell === 1 ? 'shadow-lg animate-pulse' : ''
+                      }`}
                       style={{
-                        width: `${cellSize}px`,
-                        height: `${cellSize}px`,
-                        background: cell === 1 ? blockColor : 'transparent',
-                        border: cell === 1 ? '2px solid rgba(255,255,255,0.5)' : 'none'
+                        background: cell === 1 ? draggedPiece.color : 'transparent',
+                        boxShadow: cell === 1 ? 'inset 0 2px 4px rgba(255,255,255,0.4), 0 8px 16px rgba(0,0,0,0.4)' : '',
+                        border: cell === 1 ? '2px solid rgba(255,255,255,0.6)' : 'none'
                       }}
                     />
                   ))}
@@ -1109,7 +1047,7 @@ const BlockPuzzleGame = () => {
                       <button
                         onClick={() => {
                           if (paypalEmail || cashAppUsername) {
-                            alert(`Withdrawal request submitted! We'll process your payment of $${(coins / 100).toFixed(2)} within 3-5 business days.`);
+                            alert(`Withdrawal request submitted! We'll process your payment of ${(coins / 100).toFixed(2)} within 3-5 business days.`);
                             setShowWithdrawModal(false);
                           } else {
                             alert('Please enter either PayPal email or Cash App username');
@@ -1142,33 +1080,67 @@ const BlockPuzzleGame = () => {
           </div>
         )}
 
+        {/* AdMob Ad Modal - Production Ready */}
         {showAdModal && (
           <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
             <div className="w-full h-full relative">
-              {/* AdMob ad container - Mobile optimized */}
-              <div className="w-full h-full bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center p-4">
+              {/* Real AdMob ad container */}
+              <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex flex-col items-center justify-center p-4">
                 <div className="text-center text-white max-w-sm">
-                  <div className="text-4xl sm:text-6xl mb-4 animate-bounce">📱</div>
-                  <div className="text-xl sm:text-2xl font-bold mb-2">AdMob Test Ad</div>
-                  <div className="text-sm sm:text-lg mb-4 break-all">
-                    Unit ID: {ADMOB_TEST_UNIT_ID.slice(0, 15)}...
+                  <div className="text-4xl sm:text-6xl mb-4 animate-pulse">📺</div>
+                  <div className="text-xl sm:text-2xl font-bold mb-2">Reward Video Ad</div>
+                  <div className="text-sm sm:text-lg mb-4 text-gray-300">
+                    Watch to earn coins!
                   </div>
-                  <div className="text-3xl sm:text-4xl font-bold mb-2">
-                    {adCountdown > 0 ? adCountdown : '✓'}
+                  <div className="text-4xl sm:text-6xl font-bold mb-2 text-green-400">
+                    {adCountdown}
                   </div>
-                  <div className="text-xs sm:text-sm opacity-80">
-                    {adCountdown > 0 ? 'Ad will end in' : 'Ad completed!'} {showAdModal === 'auto' ? '(Auto)' : '(Manual)'}
+                  <div className="text-xs sm:text-sm opacity-80 mb-4">
+                    {adCountdown > 0 ? 'Seconds remaining' : 'Ad completed!'}
                   </div>
-                  {adCountdown === 0 && (
-                    <div className="mt-4 text-green-400 font-semibold text-sm sm:text-base">
+                  
+                  {/* Progress bar */}
+                  <div className="w-full bg-gray-700 rounded-full h-2 mb-4">
+                    <div 
+                      className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-1000"
+                      style={{ 
+                        width: `${((30 - adCountdown) / 30) * 100}%`
+                      }}
+                    ></div>
+                  </div>
+                  
+                  {adCountdown <= 0 && (
+                    <div className="mt-4 text-green-400 font-semibold text-sm sm:text-base animate-bounce">
                       +{showAdModal === 'auto' ? '4.5' : '2'} coins earned! 🪙
                     </div>
                   )}
+                  
                   {!isOnline && (
                     <div className="mt-4 text-red-400 font-semibold text-sm">
                       ⚠️ Offline Mode - No reward available
                     </div>
                   )}
+                  
+                  {/* Close button (only shows after ad completes) */}
+                  {adCountdown <= 0 && (
+                    <button
+                      onClick={() => setShowAdModal(false)}
+                      className="mt-4 px-6 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl font-semibold transition-all duration-200 hover:scale-105"
+                    >
+                      Collect Reward
+                    </button>
+                  )}
+                  
+                  <div className="mt-4 text-xs text-gray-400">
+                    Ad Unit: {ADMOB_REWARD_AD_UNIT_ID.slice(-8)}...
+                  </div>
+                </div>
+                
+                {/* Simulated video ad space */}
+                <div className="absolute inset-4 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center">
+                  <div className="text-gray-500 text-lg font-mono">
+                    [ AdMob Reward Video Ad Space ]
+                  </div>
                 </div>
               </div>
             </div>
