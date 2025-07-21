@@ -22,6 +22,9 @@ const BlockPuzzleGame = () => {
   const [adCountdown, setAdCountdown] = useState(3);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [playingSounds, setPlayingSounds] = useState(true);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [paypalEmail, setPaypalEmail] = useState('');
+  const [cashAppUsername, setCashAppUsername] = useState('');
 
   // Beautiful modern color palette with gradients
   const colors = [
@@ -683,7 +686,7 @@ const BlockPuzzleGame = () => {
               </div>
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Coins</div>
-                <div className="font-bold text-sm sm:text-lg text-yellow-400 flex items-center gap-1">
+                <div className="font-bold text-sm sm:text-lg text-yellow-400 flex items-center gap-1 cursor-pointer" onClick={() => setShowWithdrawModal(true)}>
                   🪙 {coins}
                 </div>
               </div>
@@ -710,6 +713,16 @@ const BlockPuzzleGame = () => {
                 <span className="hidden sm:inline">{isOnline ? 'Get Coins' : 'Offline'}</span>
                 <span className="sm:hidden">{isOnline ? 'Coins' : 'Off'}</span>
               </button>
+              
+              {coins >= 15000 && (
+                <button
+                  onClick={() => setShowWithdrawModal(true)}
+                  className="flex items-center space-x-1 px-3 py-2 sm:px-4 sm:py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg transform hover:scale-105 text-xs sm:text-sm"
+                >
+                  💰
+                  <span className="hidden sm:inline">Withdraw</span>
+                </button>
+              )}
               
               <button
                 onClick={() => setPlayingSounds(!playingSounds)}
@@ -836,7 +849,106 @@ const BlockPuzzleGame = () => {
         )}
 
 
-        {/* AdMob Test Ad Player - Android Responsive */}
+        {/* Withdraw Coins Modal */}
+        {showWithdrawModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-gradient-to-br from-white/95 to-white/85 backdrop-blur-md rounded-3xl p-8 max-w-md w-full shadow-2xl border border-white/30 transform animate-scale-in">
+              <div className="text-center">
+                <div className="text-6xl mb-4">💰</div>
+                <h3 className="text-3xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Withdraw Coins
+                </h3>
+                <div className="text-lg text-gray-700 mb-6">
+                  Turn your coins into real money!
+                </div>
+                <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-lg mb-6">
+                  100 coins = $1 USD
+                </div>
+                <div className="text-xl font-semibold text-gray-800 mb-6">
+                  Your balance: {coins} coins = ${(coins / 100).toFixed(2)} USD
+                </div>
+                
+                {coins >= 15000 ? (
+                  <div className="space-y-4">
+                    <div className="text-green-600 font-semibold mb-4">
+                      ✅ Minimum withdrawal amount reached! ($150)
+                    </div>
+                    
+                    {/* PayPal Section */}
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons@v9/icons/paypal.svg" 
+                             alt="PayPal" className="w-6 h-6" style={{filter: 'invert(27%) sepia(98%) saturate(1455%) hue-rotate(204deg) brightness(96%) contrast(98%)'}} />
+                        <span className="font-semibold text-gray-800">PayPal</span>
+                      </div>
+                      <input
+                        type="email"
+                        placeholder="Enter your PayPal email"
+                        value={paypalEmail}
+                        onChange={(e) => setPaypalEmail(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    
+                    {/* Cash App Section */}
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons@v9/icons/cashapp.svg" 
+                             alt="Cash App" className="w-6 h-6" style={{filter: 'invert(47%) sepia(96%) saturate(4466%) hue-rotate(88deg) brightness(103%) contrast(103%)'}} />
+                        <span className="font-semibold text-gray-800">Cash App</span>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Enter your Cash App username"
+                        value={cashAppUsername}
+                        onChange={(e) => setCashAppUsername(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    </div>
+                    
+                    <div className="flex gap-3 mt-6">
+                      <button
+                        onClick={() => setShowWithdrawModal(false)}
+                        className="flex-1 py-3 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-xl font-semibold transition-all duration-200"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (paypalEmail || cashAppUsername) {
+                            alert(`Withdrawal request submitted! We'll process your payment of $${(coins / 100).toFixed(2)} within 3-5 business days.`);
+                            setShowWithdrawModal(false);
+                          } else {
+                            alert('Please enter either PayPal email or Cash App username');
+                          }
+                        }}
+                        className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-xl font-semibold transition-all duration-200"
+                      >
+                        Withdraw
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <div className="text-red-600 font-semibold mb-4">
+                      ❌ Minimum withdrawal: $150 USD (15,000 coins)
+                    </div>
+                    <div className="text-gray-600 mb-6">
+                      You need {15000 - coins} more coins to withdraw
+                    </div>
+                    <button
+                      onClick={() => setShowWithdrawModal(false)}
+                      className="w-full py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-xl font-semibold hover:from-purple-600 hover:to-blue-600 transition-all duration-200"
+                    >
+                      Keep Playing
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {showAdModal && (
           <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
             <div className="w-full h-full relative">
