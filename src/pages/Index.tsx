@@ -29,15 +29,8 @@ const BlockPuzzleGame = () => {
   const [gameOverModalVisible, setGameOverModalVisible] = useState(false);
   const [backgroundMusic, setBackgroundMusic] = useState<AudioContext | null>(null);
 
-  // Beautiful modern color palette with gradients
-  const colors = [
-    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', // Purple gradient
-    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', // Pink gradient
-    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', // Blue gradient
-    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', // Green gradient
-    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', // Orange gradient
-    'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)', // Pastel gradient
-  ];
+  // Orange color for all blocks
+  const blockColor = '#FF6B35'; // Orange color
 
   // Generate proper piece shapes with correct sizes
   const generatePieceShapes = () => {
@@ -81,12 +74,11 @@ const BlockPuzzleGame = () => {
     
     for (let i = 0; i < 3; i++) {
       const shape = availableShapes[Math.floor(Math.random() * availableShapes.length)];
-      const color = colors[Math.floor(Math.random() * colors.length)];
       
       pieces.push({
         id: Date.now() + i + Math.random(),
         shape: shape,
-        color: color,
+        color: blockColor,
         used: false
       });
     }
@@ -595,7 +587,7 @@ const BlockPuzzleGame = () => {
         osc4.frequency.exponentialRampToValueAtTime(1500, audioContext.currentTime + 0.3);
         gain4.gain.setValueAtTime(0.2, audioContext.currentTime);
         gain4.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-        osc4.start();
+        osc4.start(audioContext.currentTime + 0.3);
         osc4.stop(audioContext.currentTime + 0.3);
         break;
     }
@@ -789,13 +781,8 @@ const BlockPuzzleGame = () => {
                       background: cell !== 0 
                         ? isExploding 
                           ? 'radial-gradient(circle, #FCD34D, #F59E0B)'
-                          : cell 
+                          : blockColor 
                         : '',
-                      boxShadow: cell !== 0 && !isExploding 
-                        ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.2)' 
-                        : isExploding
-                          ? '0 0 20px #F59E0B, 0 0 40px #F59E0B'
-                          : '',
                       transform: isExploding ? 'scale(1.3) rotate(45deg)' : 'scale(1)',
                       zIndex: isExploding ? 10 : 'auto',
                       position: 'relative',
@@ -817,7 +804,7 @@ const BlockPuzzleGame = () => {
                 className={`cursor-pointer transition-all duration-300 select-none p-3 rounded-xl ${
                   piece.used 
                     ? 'opacity-30 scale-75' 
-                    : 'hover:scale-110 active:scale-95 hover:bg-white/10 hover:shadow-lg'
+                    : 'hover:scale-110 active:scale-95 hover:bg-white/10'
                 }`}
                 onMouseDown={(e) => handlePieceStart(e, piece)}
                 onTouchStart={(e) => handlePieceStart(e, piece)}
@@ -833,12 +820,9 @@ const BlockPuzzleGame = () => {
                       {row.map((cell, colIndex) => (
                         <div
                           key={colIndex}
-                          className={`w-8 h-8 rounded-lg transition-all duration-200 ${
-                            cell === 1 ? 'shadow-lg' : ''
-                          }`}
+                          className={`w-8 h-8 rounded-lg transition-all duration-200`}
                           style={{
-                            background: cell === 1 ? piece.color : 'transparent',
-                            boxShadow: cell === 1 ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.3)' : '',
+                            background: cell === 1 ? blockColor : 'transparent',
                             border: cell === 1 ? '1px solid rgba(255,255,255,0.3)' : 'none'
                           }}
                         />
@@ -868,12 +852,9 @@ const BlockPuzzleGame = () => {
                   {row.map((cell, colIndex) => (
                     <div
                       key={colIndex}
-                      className={`w-8 h-8 rounded-lg ${
-                        cell === 1 ? 'shadow-lg' : ''
-                      }`}
+                      className={`w-8 h-8 rounded-lg`}
                       style={{
-                        background: cell === 1 ? draggedPiece.color : 'transparent',
-                        boxShadow: cell === 1 ? 'inset 0 2px 4px rgba(255,255,255,0.4), 0 8px 16px rgba(0,0,0,0.4)' : '',
+                        background: cell === 1 ? blockColor : 'transparent',
                         border: cell === 1 ? '2px solid rgba(255,255,255,0.5)' : 'none'
                       }}
                     />
