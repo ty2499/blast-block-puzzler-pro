@@ -367,6 +367,8 @@ const BlockPuzzleGame = () => {
     const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
     const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
     
+    let placementSuccessful = false;
+    
     // Check if over grid
     const gridElement = document.querySelector('.game-grid');
     if (gridElement) {
@@ -382,14 +384,27 @@ const BlockPuzzleGame = () => {
         // Only place if exact position is valid - no auto-snapping
         if (canPlaceExactly(draggedPiece, targetRow, targetCol)) {
           placePieceAt(draggedPiece, targetRow, targetCol);
+          placementSuccessful = true;
+        } else {
+          // Placement failed - show rejection feedback
+          showPlacementRejection();
         }
       }
     }
     
-    setDraggedPiece(null);
-    setIsDragging(false);
-    setDraggedPiecePosition({ x: 0, y: 0 });
-    setSnapPosition(null);
+    // Only reset drag state if placement was successful
+    if (placementSuccessful) {
+      setDraggedPiece(null);
+      setIsDragging(false);
+      setDraggedPiecePosition({ x: 0, y: 0 });
+      setSnapPosition(null);
+    } else {
+      // Reset drag but keep piece available
+      setDraggedPiece(null);
+      setIsDragging(false);
+      setDraggedPiecePosition({ x: 0, y: 0 });
+      setSnapPosition(null);
+    }
   };
 
   // Add event listeners for drag
@@ -507,8 +522,25 @@ const BlockPuzzleGame = () => {
     playLoop();
   };
 
+  // Show placement rejection feedback
+  const showPlacementRejection = () => {
+    // Play error sound
+    if (playingSounds) {
+      playSound('placementError');
+    }
+    
+    // Add shake animation to the piece area
+    const piecesContainer = document.querySelector('.pieces-container');
+    if (piecesContainer) {
+      piecesContainer.classList.add('shake');
+      setTimeout(() => {
+        piecesContainer.classList.remove('shake');
+      }, 500);
+    }
+  };
+
   // Play game sounds
-  const playSound = (type: 'blockPlace' | 'blockbuster' | 'gameOver' | 'levelUp' | 'lineClear') => {
+  const playSound = (type: 'blockPlace' | 'blockbuster' | 'gameOver' | 'levelUp' | 'lineClear' | 'placementError') => {
     if (!playingSounds) return;
     
     // Web Audio API sound generation
@@ -597,6 +629,27 @@ const BlockPuzzleGame = () => {
         gain4.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
         osc4.start();
         osc4.stop(audioContext.currentTime + 0.3);
+        break;
+        
+      case 'placementError':
+        // Error buzz sound
+        const errorOsc1 = audioContext.createOscillator();
+        const errorOsc2 = audioContext.createOscillator();
+        const errorGain = audioContext.createGain();
+        
+        errorOsc1.connect(errorGain);
+        errorOsc2.connect(errorGain);
+        errorGain.connect(audioContext.destination);
+        
+        errorOsc1.frequency.setValueAtTime(150, audioContext.currentTime);
+        errorOsc2.frequency.setValueAtTime(155, audioContext.currentTime); // Slight detuning for harsh sound
+        errorGain.gain.setValueAtTime(0.3, audioContext.currentTime);
+        errorGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        
+        errorOsc1.start();
+        errorOsc2.start();
+        errorOsc1.stop(audioContext.currentTime + 0.2);
+        errorOsc2.stop(audioContext.currentTime + 0.2);
         break;
     }
   };
@@ -809,7 +862,7 @@ const BlockPuzzleGame = () => {
         </div>
 
         {/* Current Pieces */}
-        <div className="bg-gradient-to-r from-white/15 to-white/5 backdrop-blur-md rounded-2xl p-6 mb-6 border border-white/10 shadow-xl">
+        <div className="pieces-container bg-gradient-to-r from-white/15 to-white/5 backdrop-blur-md rounded-2xl p-6 mb-6 border border-white/10 shadow-xl">
           <div className="flex justify-around items-center">
             {currentPieces.map((piece) => (
               <div
