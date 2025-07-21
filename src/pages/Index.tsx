@@ -746,7 +746,7 @@ const BlockPuzzleGame = () => {
               <div className="text-center">
                 <div className="text-xs opacity-80 uppercase tracking-wide">Coins</div>
                 <div className="font-bold text-sm sm:text-lg text-yellow-400 flex items-center gap-1 cursor-pointer" onClick={() => setShowWithdrawModal(true)}>
-                  🪙 {coins}
+                  🪙 {coins.toString().slice(-2).padStart(2, '0')}
                 </div>
               </div>
               <div className="text-center">
@@ -868,12 +868,12 @@ const BlockPuzzleGame = () => {
         </div>
 
         {/* Current Pieces - Mobile Optimized Layout */}
-        <div className="pieces-container bg-gradient-to-r from-white/15 to-white/5 backdrop-blur-md rounded-2xl p-4 mb-6 border border-white/10 shadow-xl">
+        <div className="pieces-container bg-gradient-to-r from-white/15 to-white/5 backdrop-blur-md rounded-2xl p-4 mb-6 border border-white/10 shadow-xl overflow-hidden">
           <div className="grid grid-cols-3 gap-4 place-items-center">
             {currentPieces.map((piece, index) => (
               <div
                 key={piece.id}
-                className={`cursor-pointer transition-all duration-300 select-none p-2 rounded-xl relative ${
+                className={`cursor-pointer transition-all duration-300 select-none p-2 rounded-xl relative overflow-hidden ${
                   piece.used 
                     ? 'opacity-30 scale-75' 
                     : 'active:scale-95 hover:bg-white/10 hover:shadow-lg'
@@ -884,16 +884,19 @@ const BlockPuzzleGame = () => {
                   touchAction: 'none',
                   userSelect: 'none',
                   WebkitUserSelect: 'none',
-                  minHeight: '80px',
-                  minWidth: '80px',
+                  height: '80px',
+                  width: '80px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  position: 'relative'
                 }}
               >
                 <div className="grid gap-1" style={{ 
                   gridTemplateColumns: `repeat(${piece.shape[0]?.length || 1}, 1fr)`,
-                  gridTemplateRows: `repeat(${piece.shape.length}, 1fr)`
+                  gridTemplateRows: `repeat(${piece.shape.length}, 1fr)`,
+                  maxWidth: '100%',
+                  maxHeight: '100%'
                 }}>
                   {piece.shape.map((row, rowIndex) => 
                     row.map((cell, colIndex) => (
@@ -903,8 +906,8 @@ const BlockPuzzleGame = () => {
                           cell === 1 ? 'shadow-lg' : ''
                         }`}
                         style={{
-                          width: '24px',
-                          height: '24px',
+                          width: '20px',
+                          height: '20px',
                           background: cell === 1 ? piece.color : 'transparent',
                           boxShadow: cell === 1 ? 'inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.3)' : '',
                           border: cell === 1 ? '1px solid rgba(255,255,255,0.3)' : 'none',
