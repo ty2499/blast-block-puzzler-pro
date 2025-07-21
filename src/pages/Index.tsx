@@ -179,9 +179,9 @@ const BlockPuzzleGame = () => {
     setIsClearing(true);
     setExplodingCells(new Set(linesToClear));
     
-    // Play line clear sound
+    // Play blockbuster sound effect
     if (playingSounds) {
-      playSound('lineClear');
+      playSound('blockbuster');
     }
     
     // Wait for blast animation
@@ -509,7 +509,7 @@ const BlockPuzzleGame = () => {
   };
 
   // Play game sounds
-  const playSound = (type: 'blockPlace' | 'lineClear' | 'gameOver' | 'levelUp' | 'background') => {
+  const playSound = (type: 'blockPlace' | 'blockbuster' | 'gameOver' | 'levelUp' | 'background') => {
     if (!playingSounds) return;
     
     // Web Audio API sound generation
@@ -529,18 +529,32 @@ const BlockPuzzleGame = () => {
         oscillator1.stop(audioContext.currentTime + 0.1);
         break;
         
-      case 'lineClear':
-        // Success sound
-        const oscillator2 = audioContext.createOscillator();
-        const gainNode2 = audioContext.createGain();
-        oscillator2.connect(gainNode2);
-        gainNode2.connect(audioContext.destination);
-        oscillator2.frequency.setValueAtTime(400, audioContext.currentTime);
-        oscillator2.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.3);
-        gainNode2.gain.setValueAtTime(0.2, audioContext.currentTime);
-        gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-        oscillator2.start();
-        oscillator2.stop(audioContext.currentTime + 0.3);
+      case 'blockbuster':
+        // Epic blockbuster explosion sound
+        const frequencies = [220, 330, 440, 660, 880];
+        frequencies.forEach((freq, i) => {
+          const osc = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          const filter = audioContext.createBiquadFilter();
+          
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(audioContext.destination);
+          
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, audioContext.currentTime + i * 0.05);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.5, audioContext.currentTime + i * 0.05 + 0.4);
+          
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(2000, audioContext.currentTime + i * 0.05);
+          filter.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + i * 0.05 + 0.4);
+          
+          gain.gain.setValueAtTime(0.15, audioContext.currentTime + i * 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.05 + 0.5);
+          
+          osc.start(audioContext.currentTime + i * 0.05);
+          osc.stop(audioContext.currentTime + i * 0.05 + 0.5);
+        });
         break;
         
       case 'gameOver':
@@ -586,7 +600,7 @@ const BlockPuzzleGame = () => {
     
     // Simulate real AdMob ad loading and completion
     const adLoadTime = Math.random() * 2000 + 1000; // 1-3 seconds loading
-    const adDuration = 30000; // 30 seconds
+    const adDuration = 3000; // 3 seconds for fast testing, real ads can be 30 seconds
     
     setShowAdModal(type);
     setAdCountdown(Math.ceil(adDuration / 1000));
@@ -594,7 +608,7 @@ const BlockPuzzleGame = () => {
     // Start ad after loading simulation
     setTimeout(() => {
       console.log('📺 AdMob test ad started');
-      // Ad completion after 30 seconds
+      // Auto-close ad after duration without user interaction
       setTimeout(() => {
         completeAdWatch(type);
       }, adDuration);
@@ -734,9 +748,9 @@ const BlockPuzzleGame = () => {
           </div>
         </div>
 
-        {/* Game Grid */}
+        {/* Game Grid - Fixed positioning for Android */}
         <div className="bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-md rounded-3xl p-6 mb-6 border border-white/20 shadow-2xl">
-          <div className="game-grid grid grid-cols-10 gap-2 bg-gradient-to-br from-black/30 to-black/10 p-4 rounded-2xl border border-white/10 shadow-inner">
+          <div className="game-grid grid grid-cols-10 gap-2 bg-gradient-to-br from-black/30 to-black/10 p-4 rounded-2xl border border-white/10 shadow-inner" style={{ gridTemplateRows: 'repeat(10, 1fr)', gridTemplateColumns: 'repeat(10, 1fr)' }}>
             {grid.map((row, rowIndex) =>
               row.map((cell, colIndex) => {
                 const cellKey = `${rowIndex}-${colIndex}`;
@@ -745,7 +759,7 @@ const BlockPuzzleGame = () => {
                 return (
                   <div
                     key={cellKey}
-                    className={`w-8 h-8 rounded-xl border-2 transition-all duration-300 ${
+                    className={`aspect-square rounded-xl border-2 transition-all duration-300 ${
                       cell === 0 ? 'bg-white/10 border-white/20' : 'border-white/30'
                     } ${shouldShowSnapPreview(rowIndex, colIndex) ? 'ring-2 ring-green-400 ring-opacity-60' : ''}
                     ${isExploding ? 'animate-ping bg-yellow-400 scale-125' : ''}`}
@@ -763,7 +777,14 @@ const BlockPuzzleGame = () => {
                           ? '0 0 20px #F59E0B, 0 0 40px #F59E0B'
                           : '',
                       transform: isExploding ? 'scale(1.3) rotate(45deg)' : 'scale(1)',
-                      zIndex: isExploding ? 10 : 'auto'
+                      zIndex: isExploding ? 10 : 'auto',
+                      position: 'relative',
+                      width: '100%',
+                      height: '100%',
+                      minWidth: '32px',
+                      minHeight: '32px',
+                      maxWidth: '40px',
+                      maxHeight: '40px'
                     }}
                   />
                 );
